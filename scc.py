@@ -673,9 +673,17 @@ def cd(directory):
         os.chdir(directory)
 
 
-class Command(object):
-    pass
+class Parser(argparse.ArgumentParser):
+    def add_virtualenv_argument(self):
+        self.add_argument('--venv', type=str, help="Path to the virtual environment to activate")
 
+class Command(object):
+
+    def activate(self, args):
+        if args.venv:
+            activate_file = os.path.abspath(args.venv + "/bin/activate_this.py")
+            dbg("Activating %s", activate_file)
+            execfile(activate_file, dict(__file__=activate_file))
 
 class Merge(Command):
 
@@ -699,8 +707,10 @@ class Merge(Command):
             help='PR labels to exclude from the merge')
         merge_parser.add_argument('--buildnumber', type=int, default=None,
             help='The build number to use to push to team.git')
+        merge_parser.add_virtualenv_argument()
 
     def __call__(self, args):
+        self.activate(args)
         gh = get_github(get_token())
         log.info("Merging PR based on: %s", args.base)
         log.info("Excluding PR labelled as: %s", args.exclude)
@@ -748,8 +758,10 @@ class Rebase(Command):
 
         rebase_parser.add_argument('PR', type=int, help="The number of the pull request to rebase")
         rebase_parser.add_argument('newbase', type=str, help="The branch of origin onto which the PR should be rebased")
+        rebase_parser.add_virtualenv_argument()
 
     def __call__(self, args):
+        self.activate(args)
         gh = get_github(get_token())
         cwd = os.path.abspath(os.getcwd())
         main_repo = get_git_repo(cwd, False)
@@ -807,7 +819,7 @@ class Rebase(Command):
 
 if __name__ == "__main__":
 
-    scc_parser = argparse.ArgumentParser(description='Snoopy Crime Cop Script')
+    scc_parser = Parser(description='Snoopy Crime Cop Script')
     sub_parsers = scc_parser.add_subparsers(title="Subcommands")
 
     for MyCommand in globals().values():
