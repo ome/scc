@@ -2143,6 +2143,10 @@ class UpdateSubmodules(GitRepoCommand):
             help="Fetch the latest target branch for all repos")
         self.parser.add_argument('--no-pr', action='store_false',
             dest='pr', default=True, help='Skip creating a PR.')
+        self.parser.add_argument('--tag', '-t',
+            help='Tag to use for the commit.')
+        self.parser.add_argument('--tag-message',
+            help='Message to use for the tag.')
         self.add_new_commit_args()
 
     def __call__(self, args):
@@ -2205,6 +2209,13 @@ class UpdateSubmodules(GitRepoCommand):
             update_gitmodules=args.update_gitmodules)
         for line in merge_msg.split("\n"):
             self.log.info(line)
+
+        # Tag repositories and submodules if tag is passed
+        if args.tag:
+             main_repo.tag(args.tag, args.tag_message, force = True)
+             for submodule_repo in main_repo.submodules:
+                submodule_repo.tag(args.tag, args.tag_message, force = True)
+
         return updated
 
 
