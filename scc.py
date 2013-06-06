@@ -722,6 +722,17 @@ class GitRepository(object):
         self.dbg("Committing %s...", msg)
         self.call("git", "commit", "-m", msg)
 
+    def tag(self, tag, message=None, force=False):
+        """Tag the HEAD of the git repository"""
+        self.cd(self.path)
+        self.dbg("Creating tag %s...", tag)
+        if message is None:
+            message = "Tag with version %s" % tag
+        if force:
+            self.call("git", "tag", "-f", tag, "-m", message)
+        else:
+            self.call("git", "tag", tag, "-m", message)
+
     def new_branch(self, name, head="HEAD"):
         self.cd(self.path)
         self.dbg("New branch %s from %s...", name, head)
