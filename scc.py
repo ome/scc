@@ -720,7 +720,12 @@ class GitRepository(object):
     def commit(self, msg):
         self.cd(self.path)
         self.dbg("Committing %s...", msg)
-        self.call("git", "commit", "-m", msg)
+        user =  git_config("user.name")
+        email =  git_config("user.email")
+        if user is None and email is None:
+            self.call("git", "commit", "-m", msg, "--author", "%s <>" % self.gh.get_user().name)
+        else:
+            self.call("git", "commit", "-m", msg)
 
     def new_branch(self, name, head="HEAD"):
         self.cd(self.path)
