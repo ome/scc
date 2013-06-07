@@ -780,7 +780,14 @@ class GitRepository(object):
         """Merge a specific commit"""
 
         self.cd(self.path)
-        self.call("git", "merge", commit, "--no-ff", "-m", message)
+        user =  git_config("user.name")
+        email =  git_config("user.email")
+        args = []
+        if user is None and email is None:
+            preargs.append("GIT_AUTHOR_NAME=%s" % gh.get_user().name)
+            preargs.append("GIT_AUTHOR_EMAIL=''" % gh.get_user().name)
+        args.extend(["git", "merge", commit, "--no-ff", "-m", message])
+        self.call(*args)
 
     def fast_forward(self, base, remote = "origin"):
         """Execute merge --ff-only against the current base"""
