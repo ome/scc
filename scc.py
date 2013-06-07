@@ -776,6 +776,12 @@ class GitRepository(object):
         self.call("git", "reset", "--hard", "HEAD")
         self.call("git", "submodule", "update", "--recursive")
 
+    def merge(self, commit, message = "merge %s" % commit):
+        """Merge a specific commit"""
+
+        self.cd(self.path)
+        self.call("git", "merge", commit, "--no-ff", "-m", message)
+
     def fast_forward(self, base, remote = "origin"):
         """Execute merge --ff-only against the current base"""
         self.dbg("## Merging base to ensure closed PRs are included.")
@@ -860,7 +866,7 @@ class GitRepository(object):
             repo = basename.rsplit()[0]
         return [user , repo]
 
-    def merge(self, comment=False, commit_id = "merge"):
+    def merge_candidates(self, comment=False, commit_id = "merge"):
         """Merge candidate pull requests."""
         self.dbg("## Unique users: %s", self.unique_logins())
         for key, url in self.remotes().items():
@@ -875,8 +881,8 @@ class GitRepository(object):
             premerge_sha = premerge_sha.rstrip("\n")
 
             try:
-                self.call("git", "merge", "--no-ff", "-m", \
-                        "%s: PR %s (%s)" % (commit_id, pullrequest.get_number(), pullrequest.get_title()), pullrequest.get_sha())
+                merge_msg = "%s: PR %s (%s)" % (commit_id, pullrequest.get_number(), pullrequest.get_title())
+                self.merge(pullrequest.get_sha(), merge_msg)
                 merged_pulls.append(pullrequest)
             except:
                 self.call("git", "reset", "--hard", "%s" % premerge_sha)
@@ -937,7 +943,7 @@ class GitRepository(object):
             self.write_directories()
             presha1 = self.get_current_sha1()
             merge_msg += self.fast_forward(filters["base"])  + "\n"
-            merge_msg += self.merge(comment, commit_id = commit_id)
+            merge_msg += self.merge_candidates(comment, commit_id = commit_id)
             postsha1 = self.get_current_sha1()
             updated = (presha1 != postsha1)
 
