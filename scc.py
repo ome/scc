@@ -985,7 +985,7 @@ class GitRepository(object):
                     git_config(config_name, config_file=".gitmodules", value=new_url)
 
             if self.has_local_changes():
-                self.call("git", "commit", "-a", "-n", "-m", top_message)
+                self.commit(top_message, all=True, noverify=True)
                 updated = True
         return updated, merge_msg
 
