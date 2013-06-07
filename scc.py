@@ -717,10 +717,14 @@ class GitRepository(object):
         self.dbg("Adding %s...", file)
         self.call("git", "add", file)
 
-    def commit(self, msg):
+    def commit(self, msg, all=False, noverify=False):
         self.cd(self.path)
         self.dbg("Committing %s...", msg)
         args = ["-m", msg]
+        if all:
+            args.append("-a")
+        if noverify:
+            args.append("-n")
         user =  git_config("user.name")
         email =  git_config("user.email")
         if user is None and email is None:
