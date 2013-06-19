@@ -2158,6 +2158,8 @@ class UpdateSubmodules(GitRepoCommand):
         try:
             if args.message is None:
                 args.message = "Update %s submodules" % args.base
+                if args.tag:
+                    args.message += " for tag %s" % args.tag
             self.log.info(args.message)
             updated = self.submodules(args, self.main_repo)
 
