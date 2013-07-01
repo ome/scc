@@ -717,10 +717,20 @@ class GitRepository(object):
         self.dbg("Adding %s...", file)
         self.call("git", "add", file)
 
-    def commit(self, msg):
+    def commit(self, msg, all=False, noverify=False):
         self.cd(self.path)
         self.dbg("Committing %s...", msg)
-        self.call("git", "commit", "-m", msg)
+        args = ["-m", msg]
+        if all:
+            args.append("-a")
+        if noverify:
+            args.append("-n")
+        user =  git_config("user.name")
+        email =  git_config("user.email")
+        if user is None and email is None:
+            args.extend(["--author", "%s <>" % self.gh.get_user().name])
+
+        self.call("git", "commit", *args)
 
     def new_branch(self, name, head="HEAD"):
         self.cd(self.path)
@@ -765,6 +775,19 @@ class GitRepository(object):
         self.dbg("Resetting...")
         self.call("git", "reset", "--hard", "HEAD")
         self.call("git", "submodule", "update", "--recursive")
+
+    def merge(self, commit, message = "merge %s" % commit):
+        """Merge a specific commit"""
+
+        self.cd(self.path)
+        user =  git_config("user.name")
+        email =  git_config("user.email")
+        args = []
+        if user is None and email is None:
+            preargs.append("GIT_AUTHOR_NAME=%s" % gh.get_user().name)
+            preargs.append("GIT_AUTHOR_EMAIL=''" % gh.get_user().name)
+        args.extend(["git", "merge", commit, "--no-ff", "-m", message])
+        self.call(*args)
 
     def fast_forward(self, base, remote = "origin"):
         """Execute merge --ff-only against the current base"""
@@ -850,7 +873,7 @@ class GitRepository(object):
             repo = basename.rsplit()[0]
         return [user , repo]
 
-    def merge(self, comment=False, commit_id = "merge"):
+    def merge_candidates(self, comment=False, commit_id = "merge"):
         """Merge candidate pull requests."""
         self.dbg("## Unique users: %s", self.unique_logins())
         for key, url in self.remotes().items():
@@ -865,8 +888,8 @@ class GitRepository(object):
             premerge_sha = premerge_sha.rstrip("\n")
 
             try:
-                self.call("git", "merge", "--no-ff", "-m", \
-                        "%s: PR %s (%s)" % (commit_id, pullrequest.get_number(), pullrequest.get_title()), pullrequest.get_sha())
+                merge_msg = "%s: PR %s (%s)" % (commit_id, pullrequest.get_number(), pullrequest.get_title())
+                self.merge(pullrequest.get_sha(), merge_msg)
                 merged_pulls.append(pullrequest)
             except:
                 self.call("git", "reset", "--hard", "%s" % premerge_sha)
@@ -927,7 +950,7 @@ class GitRepository(object):
             self.write_directories()
             presha1 = self.get_current_sha1()
             merge_msg += self.fast_forward(filters["base"])  + "\n"
-            merge_msg += self.merge(comment, commit_id = commit_id)
+            merge_msg += self.merge_candidates(comment, commit_id = commit_id)
             postsha1 = self.get_current_sha1()
             updated = (presha1 != postsha1)
 
@@ -975,7 +998,7 @@ class GitRepository(object):
                     git_config(config_name, config_file=".gitmodules", value=new_url)
 
             if self.has_local_changes():
-                self.call("git", "commit", "-a", "-n", "-m", top_message)
+                self.commit(top_message, all=True, noverify=True)
                 updated = True
         return updated, merge_msg
 
