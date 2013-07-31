@@ -729,6 +729,17 @@ class GitRepository(object):
         self.dbg("Committing %s...", msg)
         self.call("git", "commit", "-m", msg)
 
+    def tag(self, tag, message=None, force=False):
+        """Tag the HEAD of the git repository"""
+        self.cd(self.path)
+        self.dbg("Creating tag %s...", tag)
+        if message is None:
+            message = "Tag with version %s" % tag
+        if force:
+            self.call("git", "tag", "-f", tag, "-m", message)
+        else:
+            self.call("git", "tag", tag, "-m", message)
+
     def new_branch(self, name, head="HEAD"):
         self.cd(self.path)
         self.dbg("New branch %s from %s...", name, head)
@@ -2214,6 +2225,10 @@ class UpdateSubmodules(GitRepoCommand):
             help="Fetch the latest target branch for all repos")
         self.parser.add_argument('--no-pr', action='store_false',
             dest='pr', default=True, help='Skip creating a PR.')
+        self.parser.add_argument('--tag', '-t',
+            help='Tag to use for the commit.')
+        self.parser.add_argument('--tag-message',
+            help='Message to use for the tag.')
         self.add_new_commit_args()
 
     def __call__(self, args):
@@ -2225,6 +2240,8 @@ class UpdateSubmodules(GitRepoCommand):
         try:
             if args.message is None:
                 args.message = "Update %s submodules" % args.base
+                if args.tag:
+                    args.message += " for tag %s" % args.tag
             self.log.info(args.message)
             updated = self.submodules(args, self.main_repo)
 
@@ -2251,9 +2268,10 @@ class UpdateSubmodules(GitRepoCommand):
                                     args.push))
                         self.log.info("New PR created: %s", pr.html_url)
                     else:
-                        msg = "Updated by build [%s#%s](%s)." % \
-                            (JOB_NAME, BUILD_NUMBER, BUILD_URL)
-                        pr.create_comment(msg)
+                        if IS_JENKINS_JOB:
+                            msg = "Updated by build [%s#%s](%s)." % \
+                                (JOB_NAME, BUILD_NUMBER, BUILD_URL)
+                            pr.create_comment(msg)
         finally:
             self.main_repo.rcleanup()
 
@@ -2276,6 +2294,13 @@ class UpdateSubmodules(GitRepoCommand):
             update_gitmodules=args.update_gitmodules)
         for line in merge_msg.split("\n"):
             self.log.info(line)
+
+        # Tag repositories and submodules if tag is passed
+        if args.tag:
+             main_repo.tag(args.tag, args.tag_message, force = True)
+             for submodule_repo in main_repo.submodules:
+                submodule_repo.tag(args.tag, args.tag_message, force = True)
+
         return updated
 
 
