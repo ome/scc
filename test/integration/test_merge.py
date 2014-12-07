@@ -164,6 +164,15 @@ class TestMergePullRequest(MergeTest):
         comments = issue.get_comments()
         assert comments[0].body == EMPTY_MSG
 
+    def testListMergedFiles(self):
+        assert self.sandbox.list_merged_files(self.sha) == set([self.branch])
+
+    def testListUpstreamChanges(self):
+        assert self.sandbox.list_upstream_changes(self.sha) == set()
+        upstream = self.fake_branch(head=self.base)
+        assert self.sandbox.list_upstream_changes(self.sha, upstream) == set(
+            [upstream])
+
 
 class TestMergeBranch(MergeTest):
 
