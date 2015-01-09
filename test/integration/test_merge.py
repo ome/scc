@@ -243,13 +243,16 @@ class TestMergeConflicting(SandboxTest):
         main("scc", args=args, items=[(Merge.NAME, Merge)])
 
     def testMerge(self):
-        self.merge("--comment")
+        self.merge("--comment", "-v")
         c1 = self.stripLastComment(self.pr1)
         c2 = self.stripLastComment(self.pr2)
+
+        print 'test'
 
         assert self.isMerged(self.sha1)
         assert not self.isMerged(self.sha2)
         assert c1 == []
+        assert c2 != []
         assert c2[-2].startswith('PR #')
         assert c2[-1] == 'conflict.txt'
 
