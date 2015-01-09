@@ -250,6 +250,7 @@ class TestMergeConflicting(SandboxTest):
         assert self.isMerged(self.sha1)
         assert not self.isMerged(self.sha2)
         assert c1 == []
+        assert c2 != []
         assert c2[-2].startswith('PR #')
         assert c2[-1] == 'conflict.txt'
 

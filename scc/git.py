@@ -639,7 +639,7 @@ class PullRequest(object):
     @retry_on_error(retries=SCC_RETRIES)
     def create_issue_comment(self, msg):
         """Add comment to Pull Request"""
-
+        print 'PR %s: Adding comment:\n%s' % (self, msg)
         return self.pull.create_issue_comment(msg)
 
     @retry_on_error(retries=SCC_RETRIES)
@@ -1547,6 +1547,7 @@ class GitRepository(object):
 
         self.info('%s\n%s', pullrequest, conflict_msg)
 
+        print comment, len(get_token())
         if comment and get_token():
             self.dbg("Adding comment to issue #%g." %
                      pullrequest.get_number())
