@@ -247,6 +247,8 @@ class TestMergeConflicting(SandboxTest):
         c1 = self.stripLastComment(self.pr1)
         c2 = self.stripLastComment(self.pr2)
 
+        print 'test'
+
         assert self.isMerged(self.sha1)
         assert not self.isMerged(self.sha2)
         assert c1 == []
