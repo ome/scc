@@ -243,7 +243,7 @@ class TestMergeConflicting(SandboxTest):
         main("scc", args=args, items=[(Merge.NAME, Merge)])
 
     def testMerge(self):
-        self.merge("--comment")
+        self.merge("--comment", "-v")
         c1 = self.stripLastComment(self.pr1)
         c2 = self.stripLastComment(self.pr2)
 
