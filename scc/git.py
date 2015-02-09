@@ -124,16 +124,16 @@ def hash_object(filename):
     digest = sha_new()
     size = os.path.getsize(filename)
     digest.update("blob %u\0" % size)
-    file = open(filename, 'rb')
+    f = open(filename, 'rb')
     length = 1024*1024
     try:
         while True:
-            block = file.read(length)
+            block = f.read(length)
             if not block:
                 break
             digest.update(block)
     finally:
-        file.close()
+        f.close()
     return digest.hexdigest()
 
 
@@ -856,8 +856,8 @@ class GitHubRepository(object):
 
     def filter_pull(self, pullrequest, filters):
 
-        is_whitelisted_comment = lambda x: self.is_whitelisted(
-            x.user, filters["include"].get("user"))
+        def is_whitelisted_comment(comment):
+            return self.is_whitelisted(x.user, filters["include"].get("user"))
 
         if pullrequest.parse(filters["exclude"].get("label"),
                              whitelist=is_whitelisted_comment):
@@ -1185,7 +1185,8 @@ class GitRepository(object):
 
     def get_rev_list(self, commit):
         """Return first parent revision list for a given commit"""
-        revlist_cmd = lambda x: ["git", "rev-list", "--first-parent", "%s" % x]
+        def revlist_cmd(x):
+            return ["git", "rev-list", "--first-parent", "%s" % x]
         o = self.communicate(*revlist_cmd(commit))
         return o.splitlines()
 
