@@ -856,7 +856,7 @@ class GitHubRepository(object):
 
     def filter_pull(self, pullrequest, filters):
 
-        def is_whitelisted_comment(comment):
+        def is_whitelisted_comment(x):
             return self.is_whitelisted(x.user, filters["include"].get("user"))
 
         if pullrequest.parse(filters["exclude"].get("label"),
