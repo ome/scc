@@ -19,6 +19,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+from __future__ import absolute_import
 import os
 import uuid
 import shutil
@@ -27,6 +28,13 @@ import tempfile
 
 from scc.git import get_github, get_token_or_user
 from subprocess import Popen
+from six.moves import range
+
+# Python 2.7 compatibility (remove and replace with range in the future)
+try:
+    xrange
+except NameError:
+    xrange = range
 
 sandbox_url = "https://github.com/openmicroscopy/snoopys-sandbox.git"
 
@@ -96,7 +104,7 @@ class SandboxTest(object):
 
         self.sandbox.new_branch(name, head=head)
 
-        for n in xrange(len(commits)):
+        for n in range(len(commits)):
             fname, txt = commits[n]
             fname = os.path.join(self.path, fname)
             with open(fname, 'w') as f:

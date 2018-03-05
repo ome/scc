@@ -19,9 +19,10 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+from __future__ import absolute_import
 from scc.git import GitRepository
 import pytest
-from Mock import MoxTestBase
+from .Mock import MoxTestBase
 
 import logging
 import subprocess
@@ -102,7 +103,7 @@ class TestGitRepository(MoxTestBase):
 
         with pytest.raises(Exception) as exc_info:
             repo.communicate('cmd', 'a', 'b')
-        assert exc_info.value.message.startswith('Failed to run ')
+        assert 'Failed to run ' in str(exc_info)
         assert p.stdout.n_close == 1
         assert p.stderr.n_close == 1
         assert p.n_wait == 0
@@ -135,7 +136,7 @@ class TestGitRepository(MoxTestBase):
 
         with pytest.raises(Exception) as exc_info:
             repo.call('cmd', 'a', 'b')
-        assert exc_info.value.message == 'rc=1'
+        assert str(exc_info).endswith('rc=1')
         assert p.stdout.n_close == 0
         assert p.stderr.n_close == 0
         assert p.n_wait == 1

@@ -19,6 +19,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+from __future__ import absolute_import
 from github.AuthenticatedUser import AuthenticatedUser
 from github.Repository import Repository
 from github.GithubException import GithubException
@@ -31,7 +32,8 @@ from scc.git import GHManager, GitHubRepository
 import socket
 from ssl import SSLError
 import pytest
-from Mock import MoxTestBase
+from .Mock import MoxTestBase
+from six.moves import range
 
 
 class InternalRetriesHelper(object):

@@ -111,7 +111,7 @@ setup(name='scc',
       # More complex variables
       packages=['scc'],
       include_package_data=True,
-      install_requires=['yaclifw>=0.1.2',
+      install_requires=['yaclifw>=0.2.0',
                         'PyGithub',
                         'argparse',
                         'PyYAML==3.11',
@@ -125,5 +125,5 @@ setup(name='scc',
       version=VERSION,
 
       cmdclass={'test': PyTest},
-      tests_require=['pytest<3.3', 'restview', 'mox'],
+      tests_require=['pytest<3.3', 'restview', 'mox3'],
       )
