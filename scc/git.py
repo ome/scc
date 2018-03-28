@@ -2993,8 +2993,8 @@ class ExternalIssues(GitHubCommand):
                     issue.html_url,
                     issue.user.login,
                 ))
-            print "##", org.login, "(%s)" % len(issues), "##"
-            print "\n".join(sorted(issues))
+            print("##", org.login, "(%s)" % len(issues), "##")
+            print("\n".join(sorted(issues)))
 
 
 class Label(GitHubCommand):
