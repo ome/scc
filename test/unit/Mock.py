@@ -19,19 +19,20 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+from __future__ import absolute_import
 from github.AuthenticatedUser import AuthenticatedUser
 from github.Repository import Repository
 
 from scc.git import GHManager
 from scc.git import GitHubRepository
 
-from mox import Mox
+from mox3 import mox
 
 
 class MoxTestBase(object):
 
     def setup_method(self, method):
-        self.mox = Mox()
+        self.mox = mox.Mox()
 
     def teardown_method(self, method):
         self.mox.UnsetStubs()

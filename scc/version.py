@@ -20,6 +20,8 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 
+from __future__ import absolute_import
+from __future__ import print_function
 import yaclifw.version
 from pkg_resources import resource_string
 
@@ -31,4 +33,4 @@ class Version(yaclifw.version.Version):
 
     def __call__(self, args):
         super(yaclifw.version.Version, self).__call__(args)
-        print resource_string(__name__, 'RELEASE-VERSION').rstrip()
+        print(resource_string(__name__, 'RELEASE-VERSION').rstrip())
