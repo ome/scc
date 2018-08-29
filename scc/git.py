@@ -1077,9 +1077,9 @@ class GitRepository(object):
 
             def __exit__(self, *args):
                 os.chdir(self.original)
-                self.dbg("< cd %s", directory)
+                self.dbg("<cd: %s --> %s", os.getcwd(), self.original)
 
-        self.dbg("> cd %s", directory)
+        self.dbg(">cd: %s --> %s", os.getcwd(), directory)
         os.chdir(directory)
         return DirectoryChanger(self.dbg)
 
