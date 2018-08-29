@@ -1023,8 +1023,8 @@ class GitRepository(object):
 
         self.__initlog__("scc.git")
         self.gh = gh  # TODO: Possibly needs a cd wrapper
-        self.path = path
-        root_path = self.communicate("git", "rev-parse", "--show-toplevel")
+        with self.cd(path):
+            root_path = self.communicate("git", "rev-parse", "--show-toplevel")
         self.path = os.path.abspath(root_path.strip())
         self.__initlog__("scc.git.%s" % os.path.basename(self.path))
 
