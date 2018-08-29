@@ -1066,7 +1066,8 @@ class GitRepository(object):
     def cd(self, directory):
         class DirectoryChanger(object):
 
-            def __init__(self):
+            def __init__(self, dbg):
+                self.dbg = dbg
                 self.original = os.getcwd()
 
             def __enter__(self):
@@ -1074,11 +1075,12 @@ class GitRepository(object):
 
             def __exit__(self, *args):
                 os.chdir(self.original)
+                self.dbg("< cd %s", directory)
 
         if not os.path.abspath(os.getcwd()) == os.path.abspath(directory):
-            self.dbg("cd %s", directory)
+            self.dbg("> cd %s", directory)
             os.chdir(directory)
-        return DirectoryChanger()
+        return DirectoryChanger(self.dbg)
 
     def communicate(self, *command, **kwargs):
         return_stderr = kwargs.pop('return_stderr', False)
@@ -1130,14 +1132,13 @@ class GitRepository(object):
         except Exception:
             no_wait = False
 
-        with self.cd(self.path):
-            self.dbg("Calling '%s'" % " ".join(command))
-            p = subprocess.Popen(command, **kwargs)
-            if not no_wait:
-                rc = p.wait()
-                if rc:
-                    raise Exception("rc=%s" % rc)
-            return p
+        self.dbg("Calling '%s'" % " ".join(command))
+        p = subprocess.Popen(command, cwd=self.path, **kwargs)
+        if not no_wait:
+            rc = p.wait()
+            if rc:
+                raise Exception("rc=%s" % rc)
+        return p
 
     def write_directories(self):
         """Write directories in candidate PRs comments to a txt file"""
