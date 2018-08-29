@@ -1045,6 +1045,9 @@ class GitRepository(object):
         if gh:
             self.origin = gh.gh_repo(repo_name, user_name)
 
+    def __str__(self):
+        return "GitRepo(%s)" % self.path
+
     def register_submodules(self):
         if len(self.submodules) == 0:
             for directory in self.get_submodule_paths():
@@ -1174,7 +1177,7 @@ class GitRepository(object):
     def get_sha1(self, branch):
         """Return the sha1 for the specified branch"""
 
-        self.dbg("Get sha1 of %s")
+        self.dbg("Get sha1 of %s" % branch)
         o = self.communicate("git", "rev-parse", branch)
         return o.strip()
 
