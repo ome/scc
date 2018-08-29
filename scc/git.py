@@ -1779,6 +1779,7 @@ class GitRepository(object):
                set_commit_status=False, allow_empty=True, is_submodule=False):
         """Recursively merge PRs for each submodule."""
 
+        self.dbg("rmerge: %s" % filters)
         if self.repository_config is not None and \
            "base-branch" in self.repository_config and \
            filters["base"] != self.repository_config["base-branch"]:
