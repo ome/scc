@@ -1023,8 +1023,8 @@ class GitRepository(object):
 
         self.__initlog__("scc.git")
         self.gh = gh  # TODO: Possibly needs a cd wrapper
-        with self.cd(path):
-            root_path = self.communicate("git", "rev-parse", "--show-toplevel")
+        self.path = path
+        root_path = self.communicate("git", "rev-parse", "--show-toplevel")
         self.path = os.path.abspath(root_path.strip())
         self.__initlog__("scc.git.%s" % os.path.basename(self.path))
 
@@ -1063,7 +1063,7 @@ class GitRepository(object):
                             self.repository_config["submodules"][directory]
 
                     submodule_repo = \
-                        self.gh.git_repo(directory,
+                        self.gh.git_repo(os.path.join(self.path, directory),
                                         repository_config=repository_config)
                     self.submodules.append(submodule_repo)
                     submodule_repo.register_submodules()
