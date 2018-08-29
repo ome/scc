@@ -1112,7 +1112,8 @@ class GitRepository(object):
     rc:     %s
     stdout: %s
     stderr: %s""" % (" ".join(command), p.returncode, o, e)
-            raise Exception(msg)
+            self.log.error(msg)
+            raise Stop("failed command")
 
         if return_stderr:
             return o, e
@@ -1311,13 +1312,13 @@ class GitRepository(object):
 
     def has_local_changes(self):
         """Check for local changes in the Git repository"""
-        try:
-            self.call("git", "diff-index", "--quiet", "HEAD")
-            self.dbg("%s has no local changes", self)
-            return False
-        except Exception:
+        out = self.communicate("git", "status", "--porcelain").strip()
+        if out:
             self.dbg("%s has local changes", self)
             return True
+        else:
+            self.dbg("%s has no local changes", self)
+            return False
 
     def has_ref(self, ref):
         """Check for reference existence in the local Git repository"""
