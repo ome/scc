@@ -1850,7 +1850,7 @@ class GitRepository(object):
 
         updated = self.has_local_changes()
         if updated:
-            self.call("git", "commit", "-a", "-n", "-m", commit_message)
+            self.communicate("git", "commit", "-a", "-n", "-m", commit_message)
         elif allow_empty:
             self.call("git", "commit", "--allow-empty", '-a', "-n", "-m",
                       commit_message)
