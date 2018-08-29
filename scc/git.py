@@ -1064,9 +1064,21 @@ class GitRepository(object):
                     self.cd(self.path)
 
     def cd(self, directory):
+        class DirectoryChanger(object):
+
+            def __init__(self):
+                self.original = os.getcwd()
+
+            def __enter__(self):
+                pass
+
+            def __exit__(self, *args):
+                os.chdir(self.original)
+
         if not os.path.abspath(os.getcwd()) == os.path.abspath(directory):
             self.dbg("cd %s", directory)
             os.chdir(directory)
+        return DirectoryChanger()
 
     def communicate(self, *command, **kwargs):
         return_stderr = kwargs.pop('return_stderr', False)
@@ -1118,32 +1130,32 @@ class GitRepository(object):
         except Exception:
             no_wait = False
 
-        self.cd(self.path)
-        self.dbg("Calling '%s'" % " ".join(command))
-        p = subprocess.Popen(command, **kwargs)
-        if not no_wait:
-            rc = p.wait()
-            if rc:
-                raise Exception("rc=%s" % rc)
-        return p
+        with self.cd(self.path):
+            self.dbg("Calling '%s'" % " ".join(command))
+            p = subprocess.Popen(command, **kwargs)
+            if not no_wait:
+                rc = p.wait()
+                if rc:
+                    raise Exception("rc=%s" % rc)
+            return p
 
     def write_directories(self):
         """Write directories in candidate PRs comments to a txt file"""
 
-        self.cd(self.path)
-        directories_log = None
+        with self.cd(self.path):
+            directories_log = None
 
-        for pr in self.origin.candidate_pulls:
-            directories = pr.parse_comments("test")
-            if directories:
-                if directories_log is None:
-                    directories_log = open('directories.txt', 'w')
-                for directory in directories:
-                    directories_log.write(directory)
-                    directories_log.write("\n")
-        # Cleanup
-        if directories_log:
-            directories_log.close()
+            for pr in self.origin.candidate_pulls:
+                directories = pr.parse_comments("test")
+                if directories:
+                    if directories_log is None:
+                        directories_log = open('directories.txt', 'w')
+                    for directory in directories:
+                        directories_log.write(directory)
+                        directories_log.write("\n")
+            # Cleanup
+            if directories_log:
+                directories_log.close()
 
     #
     # General git commands
@@ -1369,8 +1381,8 @@ class GitRepository(object):
     def get_remote_url(self, remote_name="origin"):
         """Return the URL of the remote"""
 
-        self.cd(self.path)
-        return git_config("remote.%s.url" % remote_name)
+        with self.cd(self.path):
+            return git_config("remote.%s.url" % remote_name)
 
     #
     # Higher level git commands
@@ -1763,8 +1775,7 @@ class GitRepository(object):
         if info:
             merge_msg += self.origin.merge_info()
         else:
-            self.cd(self.path)
-            self.write_directories()
+            self.write_directories()  # Handles own chdir
             presha1 = self.get_current_sha1()
             if self.has_remote_branch(filters["base"], self.remote):
                 ff_msg, ff_log = self.fast_forward(filters["base"],
@@ -1792,15 +1803,12 @@ class GitRepository(object):
             # Do not copy top-level PRs
             for ftype in ["include", "exclude"]:
                 sub_filters[ftype].pop("pr", None)
-            try:
-                submodule_updated, submodule_msg = submodule_repo.rmerge(
-                    sub_filters, info, comment, commit_id=commit_id,
-                    update_gitmodules=update_gitmodules,
-                    set_commit_status=set_commit_status,
-                    allow_empty=allow_empty, is_submodule=True)
-                merge_msg += "\n" + submodule_msg
-            finally:
-                self.cd(self.path)
+            submodule_updated, submodule_msg = submodule_repo.rmerge(
+                sub_filters, info, comment, commit_id=commit_id,
+                update_gitmodules=update_gitmodules,
+                set_commit_status=set_commit_status,
+                allow_empty=allow_empty, is_submodule=True)
+            merge_msg += "\n" + submodule_msg
 
         if not info:
             summary_update = self.summary_commit(
@@ -3171,12 +3179,13 @@ class Merge(FilteredPullRequestsCommand):
         if args.check_commit_status:
             commit_args.append("-S%s" % args.check_commit_status)
 
-        updated, merge_msg = main_repo.rmerge(
-            self.filters, args.info,
-            args.comment, commit_id=" ".join(commit_args),
-            top_message=args.message,
-            update_gitmodules=args.update_gitmodules,
-            set_commit_status=args.set_commit_status)
+        with main_repo.cd(main_repo.path):
+            updated, merge_msg = main_repo.rmerge(
+                self.filters, args.info,
+                args.comment, commit_id=" ".join(commit_args),
+                top_message=args.message,
+                update_gitmodules=args.update_gitmodules,
+                set_commit_status=args.set_commit_status)
 
         for line in merge_msg.split("\n"):
             self.log.info(line)
