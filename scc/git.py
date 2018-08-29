@@ -34,6 +34,8 @@ import difflib
 import socket
 import yaml
 import six
+import functools
+
 from ssl import SSLError
 from yaclifw.framework import Command, Stop
 
@@ -210,6 +212,17 @@ def get_github(login_or_token=None, password=None, **kwargs):
     a GitHub login and password or anonymously.
     """
     return GHManager(login_or_token, password, **kwargs)
+
+
+class CD(object):
+
+    def __call__(self, f):
+        @functools.wraps(f)
+        def wrapper(*args, **kw):
+            this = args[0]
+            with this.cd(this.path):
+                return f(*args, **kw)
+        return wrapper
 
 #
 # Management classes. These allow for proper mocking in tests.
@@ -1760,6 +1773,7 @@ class GitRepository(object):
             return lambda x: (
                 '/' in x and not x.endswith(repo_names))
 
+    @CD()
     def rmerge(self, filters, info=False, comment=False, commit_id="merge",
                top_message=None, update_gitmodules=False,
                set_commit_status=False, allow_empty=True, is_submodule=False):
