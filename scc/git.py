@@ -1060,13 +1060,12 @@ class GitRepository(object):
                    directory in self.repository_config["submodules"]:
                     repository_config = \
                         self.repository_config["submodules"][directory]
-                # TODO: Unclear if this is needed
-                with self.cd(self.path):
-                    submodule_repo = \
-                        self.gh.git_repo(directory,
-                                         repository_config=repository_config)
-                    self.submodules.append(submodule_repo)
-                    submodule_repo.register_submodules()
+
+                submodule_repo = \
+                    self.gh.git_repo(directory,
+                                     repository_config=repository_config)
+                self.submodules.append(submodule_repo)
+                submodule_repo.register_submodules()
 
     def cd(self, directory):
         class DirectoryChanger(object):
@@ -1978,9 +1977,7 @@ class GitRepository(object):
         self.dbg("Pushed %s to %s" % (branch_name, full_remote))
 
         for submodule_repo in self.submodules:
-            # TODO: Unclear if needed
-            with self.cd(self.path):
-                submodule_repo.rpush(branch_name, remote, force=force)
+            submodule_repo.rpush(branch_name, remote, force=force)
 
     def __del__(self):
         # We need to make sure our logging wrappers are closed when this
