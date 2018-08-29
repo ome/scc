@@ -735,7 +735,7 @@ class PullRequest(object):
 class GitHubRepository(object):
 
     def __init__(self, gh, user_name, repo_name):
-        self.log = logging.getLogger("scc.repo")
+        self.log = logging.getLogger("scc.repo.%s.%s" % (repo_name, user_name))
         self.dbg = self.log.debug
         self.gh = gh
         self.user_name = user_name
@@ -1007,6 +1007,13 @@ class GitHubRepository(object):
 
 class GitRepository(object):
 
+    def __initlog__(self, name):
+        self.log = logging.getLogger(name)
+        self.dbg = self.log.debug
+        self.info = self.log.info
+        self.debugWrap = LoggerWrapper(self.log, logging.DEBUG)
+        self.infoWrap = LoggerWrapper(self.log, logging.INFO)
+
     def __init__(self, gh, path, remote="origin", push_branch=None,
                  repository_config=None):
         """
@@ -1014,16 +1021,12 @@ class GitRepository(object):
         register the GitHub origin remote.
         """
 
-        self.log = logging.getLogger("scc.git")
-        self.dbg = self.log.debug
-        self.info = self.log.info
-        self.debugWrap = LoggerWrapper(self.log, logging.DEBUG)
-        self.infoWrap = LoggerWrapper(self.log, logging.INFO)
-
+        self.__initlog__("scc.git")
         self.gh = gh
         self.path = path
         root_path = self.communicate("git", "rev-parse", "--show-toplevel")
         self.path = os.path.abspath(root_path.strip())
+        self.__initlog__("scc.git.%s" % os.path.basename(self.path))
 
         self.get_status()
 
@@ -1077,9 +1080,9 @@ class GitRepository(object):
 
             def __exit__(self, *args):
                 os.chdir(self.original)
-                self.dbg("<cd: %s --> %s", os.getcwd(), self.original)
+                self.dbg(" < cd: %s" % self.original)
 
-        self.dbg(">cd: %s --> %s", os.getcwd(), directory)
+        self.dbg(" > cd: %s" % directory)
         os.chdir(directory)
         return DirectoryChanger(self.dbg)
 
