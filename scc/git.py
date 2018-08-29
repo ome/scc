@@ -1284,8 +1284,7 @@ class GitRepository(object):
             self.call("git", "diff-index", "--quiet", "HEAD")
             self.dbg("%s has no local changes", self)
             return False
-        except Exception, e:
-            print "EXCEPTION", e
+        except Exception:
             self.dbg("%s has local changes", self)
             return True
 
@@ -1851,7 +1850,6 @@ class GitRepository(object):
 
         updated = self.has_local_changes()
         if updated:
-            print self.communicate("git", "status")
             self.communicate("git", "commit", "-a", "-n", "-m", commit_message)
         elif allow_empty:
             self.call("git", "commit", "--allow-empty", '-a', "-n", "-m",
