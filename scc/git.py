@@ -1022,7 +1022,7 @@ class GitRepository(object):
         """
 
         self.__initlog__("scc.git")
-        self.gh = gh
+        self.gh = gh  # TODO: Possibly needs a cd wrapper
         self.path = path
         root_path = self.communicate("git", "rev-parse", "--show-toplevel")
         self.path = os.path.abspath(root_path.strip())
@@ -1052,20 +1052,21 @@ class GitRepository(object):
         return "GitRepo(%s)" % self.path
 
     def register_submodules(self):
-        if len(self.submodules) == 0:
-            for directory in self.get_submodule_paths():
-                repository_config = None
-                if self.repository_config is not None and \
-                   "submodules" in self.repository_config and \
-                   directory in self.repository_config["submodules"]:
-                    repository_config = \
-                        self.repository_config["submodules"][directory]
+        with self.cd(self.path):
+            if len(self.submodules) == 0:
+                for directory in self.get_submodule_paths():
+                    repository_config = None
+                    if self.repository_config is not None and \
+                    "submodules" in self.repository_config and \
+                    directory in self.repository_config["submodules"]:
+                        repository_config = \
+                            self.repository_config["submodules"][directory]
 
-                submodule_repo = \
-                    self.gh.git_repo(directory,
-                                     repository_config=repository_config)
-                self.submodules.append(submodule_repo)
-                submodule_repo.register_submodules()
+                    submodule_repo = \
+                        self.gh.git_repo(directory,
+                                        repository_config=repository_config)
+                    self.submodules.append(submodule_repo)
+                    submodule_repo.register_submodules()
 
     def cd(self, directory):
         class DirectoryChanger(object):
