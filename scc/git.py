@@ -34,6 +34,8 @@ import difflib
 import socket
 import yaml
 import six
+import functools
+
 from ssl import SSLError
 from yaclifw.framework import Command, Stop
 
@@ -210,6 +212,17 @@ def get_github(login_or_token=None, password=None, **kwargs):
     a GitHub login and password or anonymously.
     """
     return GHManager(login_or_token, password, **kwargs)
+
+
+class CD(object):
+
+    def __call__(self, f):
+        @functools.wraps(f)
+        def wrapper(*args, **kw):
+            this = args[0]
+            with this.cd(this.path):
+                return f(*args, **kw)
+        return wrapper
 
 #
 # Management classes. These allow for proper mocking in tests.
@@ -735,7 +748,7 @@ class PullRequest(object):
 class GitHubRepository(object):
 
     def __init__(self, gh, user_name, repo_name):
-        self.log = logging.getLogger("scc.repo")
+        self.log = logging.getLogger("scc.repo.%s.%s" % (repo_name, user_name))
         self.dbg = self.log.debug
         self.gh = gh
         self.user_name = user_name
@@ -1007,6 +1020,13 @@ class GitHubRepository(object):
 
 class GitRepository(object):
 
+    def __initlog__(self, name):
+        self.log = logging.getLogger(name)
+        self.dbg = self.log.debug
+        self.info = self.log.info
+        self.debugWrap = LoggerWrapper(self.log, logging.DEBUG)
+        self.infoWrap = LoggerWrapper(self.log, logging.INFO)
+
     def __init__(self, gh, path, remote="origin", push_branch=None,
                  repository_config=None):
         """
@@ -1014,16 +1034,12 @@ class GitRepository(object):
         register the GitHub origin remote.
         """
 
-        self.log = logging.getLogger("scc.git")
-        self.dbg = self.log.debug
-        self.info = self.log.info
-        self.debugWrap = LoggerWrapper(self.log, logging.DEBUG)
-        self.infoWrap = LoggerWrapper(self.log, logging.INFO)
-
-        self.gh = gh
+        self.__initlog__("scc.git")
+        self.gh = gh  # TODO: Possibly needs a cd wrapper
         self.path = path
         root_path = self.communicate("git", "rev-parse", "--show-toplevel")
         self.path = os.path.abspath(root_path.strip())
+        self.__initlog__("scc.git.%s" % os.path.basename(self.path))
 
         self.get_status()
 
@@ -1045,28 +1061,43 @@ class GitRepository(object):
         if gh:
             self.origin = gh.gh_repo(repo_name, user_name)
 
+    def __str__(self):
+        return "GitRepo(%s)" % self.path
+
     def register_submodules(self):
-        if len(self.submodules) == 0:
-            for directory in self.get_submodule_paths():
-                repository_config = None
-                if self.repository_config is not None and \
-                   "submodules" in self.repository_config and \
-                   directory in self.repository_config["submodules"]:
-                    repository_config = \
-                        self.repository_config["submodules"][directory]
-                try:
+        with self.cd(self.path):
+            if len(self.submodules) == 0:
+                for directory in self.get_submodule_paths():
+                    repository_config = None
+                    if self.repository_config is not None and \
+                    "submodules" in self.repository_config and \
+                    directory in self.repository_config["submodules"]:
+                        repository_config = \
+                            self.repository_config["submodules"][directory]
+
                     submodule_repo = \
-                        self.gh.git_repo(directory,
-                                         repository_config=repository_config)
+                        self.gh.git_repo(os.path.join(self.path, directory),
+                                        repository_config=repository_config)
                     self.submodules.append(submodule_repo)
                     submodule_repo.register_submodules()
-                finally:
-                    self.cd(self.path)
 
     def cd(self, directory):
-        if not os.path.abspath(os.getcwd()) == os.path.abspath(directory):
-            self.dbg("cd %s", directory)
-            os.chdir(directory)
+        class DirectoryChanger(object):
+
+            def __init__(self, dbg):
+                self.dbg = dbg
+                self.original = os.getcwd()
+
+            def __enter__(self):
+                pass
+
+            def __exit__(self, *args):
+                os.chdir(self.original)
+                self.dbg(" < cd: %s" % self.original)
+
+        self.dbg(" > cd: %s" % directory)
+        os.chdir(directory)
+        return DirectoryChanger(self.dbg)
 
     def communicate(self, *command, **kwargs):
         return_stderr = kwargs.pop('return_stderr', False)
@@ -1081,7 +1112,8 @@ class GitRepository(object):
     rc:     %s
     stdout: %s
     stderr: %s""" % (" ".join(command), p.returncode, o, e)
-            raise Exception(msg)
+            self.log.error(msg)
+            raise Stop("failed command")
 
         if return_stderr:
             return o, e
@@ -1118,9 +1150,8 @@ class GitRepository(object):
         except Exception:
             no_wait = False
 
-        self.cd(self.path)
         self.dbg("Calling '%s'" % " ".join(command))
-        p = subprocess.Popen(command, **kwargs)
+        p = subprocess.Popen(command, cwd=self.path, **kwargs)
         if not no_wait:
             rc = p.wait()
             if rc:
@@ -1130,20 +1161,21 @@ class GitRepository(object):
     def write_directories(self):
         """Write directories in candidate PRs comments to a txt file"""
 
-        self.cd(self.path)
-        directories_log = None
+        # Doesn't use (wrap_)call so changing
+        with self.cd(self.path):
+            directories_log = None
 
-        for pr in self.origin.candidate_pulls:
-            directories = pr.parse_comments("test")
-            if directories:
-                if directories_log is None:
-                    directories_log = open('directories.txt', 'w')
-                for directory in directories:
-                    directories_log.write(directory)
-                    directories_log.write("\n")
-        # Cleanup
-        if directories_log:
-            directories_log.close()
+            for pr in self.origin.candidate_pulls:
+                directories = pr.parse_comments("test")
+                if directories:
+                    if directories_log is None:
+                        directories_log = open('directories.txt', 'w')
+                    for directory in directories:
+                        directories_log.write(directory)
+                        directories_log.write("\n")
+            # Cleanup
+            if directories_log:
+                directories_log.close()
 
     #
     # General git commands
@@ -1161,7 +1193,7 @@ class GitRepository(object):
     def get_sha1(self, branch):
         """Return the sha1 for the specified branch"""
 
-        self.dbg("Get sha1 of %s")
+        self.dbg("Get sha1 of %s" % branch)
         o = self.communicate("git", "rev-parse", branch)
         return o.strip()
 
@@ -1369,8 +1401,9 @@ class GitRepository(object):
     def get_remote_url(self, remote_name="origin"):
         """Return the URL of the remote"""
 
-        self.cd(self.path)
-        return git_config("remote.%s.url" % remote_name)
+        # Protect git_config
+        with self.cd(self.path):
+            return git_config("remote.%s.url" % remote_name)
 
     #
     # Higher level git commands
@@ -1741,11 +1774,13 @@ class GitRepository(object):
             return lambda x: (
                 '/' in x and not x.endswith(repo_names))
 
+    @CD()
     def rmerge(self, filters, info=False, comment=False, commit_id="merge",
                top_message=None, update_gitmodules=False,
                set_commit_status=False, allow_empty=True, is_submodule=False):
         """Recursively merge PRs for each submodule."""
 
+        self.dbg("rmerge: %s" % filters)
         if self.repository_config is not None and \
            "base-branch" in self.repository_config and \
            filters["base"] != self.repository_config["base-branch"]:
@@ -1763,8 +1798,7 @@ class GitRepository(object):
         if info:
             merge_msg += self.origin.merge_info()
         else:
-            self.cd(self.path)
-            self.write_directories()
+            self.write_directories()  # Handles own chdir
             presha1 = self.get_current_sha1()
             if self.has_remote_branch(filters["base"], self.remote):
                 ff_msg, ff_log = self.fast_forward(filters["base"],
@@ -1792,15 +1826,12 @@ class GitRepository(object):
             # Do not copy top-level PRs
             for ftype in ["include", "exclude"]:
                 sub_filters[ftype].pop("pr", None)
-            try:
-                submodule_updated, submodule_msg = submodule_repo.rmerge(
-                    sub_filters, info, comment, commit_id=commit_id,
-                    update_gitmodules=update_gitmodules,
-                    set_commit_status=set_commit_status,
-                    allow_empty=allow_empty, is_submodule=True)
-                merge_msg += "\n" + submodule_msg
-            finally:
-                self.cd(self.path)
+            submodule_updated, submodule_msg = submodule_repo.rmerge(
+                sub_filters, info, comment, commit_id=commit_id,
+                update_gitmodules=update_gitmodules,
+                set_commit_status=set_commit_status,
+                allow_empty=allow_empty, is_submodule=True)
+            merge_msg += "\n" + submodule_msg
 
         if not info:
             summary_update = self.summary_commit(
@@ -1828,29 +1859,31 @@ class GitRepository(object):
             % (top_message, merge_msg + merge_msg_footer)
 
         if update_gitmodules:
-            submodule_paths = self.get_submodule_paths()
-            for path in submodule_paths:
-                # Read submodule URL registered in .gitmodules
-                config_url = "submodule.%s.url" % path
-                submodule_url = git_config(config_url,
-                                           config_file=".gitmodules")
+            # Protect calls to git_config with self.cd
+            with self.cd(self.path):
+                submodule_paths = self.get_submodule_paths()
+                for path in submodule_paths:
+                    # Read submodule URL registered in .gitmodules
+                    config_url = "submodule.%s.url" % path
+                    submodule_url = git_config(config_url,
+                                            config_file=".gitmodules")
 
-                # Substitute submodule URL using connection login
-                user = self.gh.get_login()
-                pattern = '(.*github.com[:/]).*(/.*.git)'
-                new_url = re.sub(pattern, r'\1%s\2' % user, submodule_url)
-                git_config(config_url, config_file=".gitmodules",
-                           value=new_url)
+                    # Substitute submodule URL using connection login
+                    user = self.gh.get_login()
+                    pattern = '(.*github.com[:/]).*(/.*.git)'
+                    new_url = re.sub(pattern, r'\1%s\2' % user, submodule_url)
+                    git_config(config_url, config_file=".gitmodules",
+                            value=new_url)
 
-                # Substitute submodule branch
-                if self.push_branch is not None:
-                    config_branch = "submodule.%s.branch" % path
-                    git_config(config_branch, config_file=".gitmodules",
-                               value=self.push_branch_name)
+                    # Substitute submodule branch
+                    if self.push_branch is not None:
+                        config_branch = "submodule.%s.branch" % path
+                        git_config(config_branch, config_file=".gitmodules",
+                                value=self.push_branch_name)
 
         updated = self.has_local_changes()
         if updated:
-            self.call("git", "commit", "-a", "-n", "-m", commit_message)
+            self.communicate("git", "commit", "-a", "-n", "-m", commit_message)
         elif allow_empty:
             self.call("git", "commit", "--allow-empty", '-a', "-n", "-m",
                       commit_message)
@@ -1940,7 +1973,6 @@ class GitRepository(object):
                 submodule_repo.rcleanup()
             except Exception:
                 self.dbg("Failed to clean repository %s" % self.path)
-            self.cd(self.path)
 
     def cleanup(self):
         """Remove remote branches created for merging."""
@@ -1962,10 +1994,7 @@ class GitRepository(object):
         self.dbg("Pushed %s to %s" % (branch_name, full_remote))
 
         for submodule_repo in self.submodules:
-            try:
-                submodule_repo.rpush(branch_name, remote, force=force)
-            finally:
-                self.cd(self.path)
+            submodule_repo.rpush(branch_name, remote, force=force)
 
     def __del__(self):
         # We need to make sure our logging wrappers are closed when this
@@ -3171,12 +3200,13 @@ class Merge(FilteredPullRequestsCommand):
         if args.check_commit_status:
             commit_args.append("-S%s" % args.check_commit_status)
 
-        updated, merge_msg = main_repo.rmerge(
-            self.filters, args.info,
-            args.comment, commit_id=" ".join(commit_args),
-            top_message=args.message,
-            update_gitmodules=args.update_gitmodules,
-            set_commit_status=args.set_commit_status)
+        with main_repo.cd(main_repo.path):
+            updated, merge_msg = main_repo.rmerge(
+                self.filters, args.info,
+                args.comment, commit_id=" ".join(commit_args),
+                top_message=args.message,
+                update_gitmodules=args.update_gitmodules,
+                set_commit_status=args.set_commit_status)
 
         for line in merge_msg.split("\n"):
             self.log.info(line)
