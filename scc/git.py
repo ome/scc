@@ -3008,7 +3008,7 @@ class GitHubIssues(GitHubCommand):
             help="filter issues which have had labels applied")
         self.parser.add_argument(
             '--by-date', action="store_true", default=False,
-            help="group issues by YYYY-MM in reverse order")
+            help="group issues by YYYY-MM")
         self.parser.add_argument(
             'orgs', nargs="+",
             help="organizations that should be checked")
@@ -3022,11 +3022,21 @@ class GitHubIssues(GitHubCommand):
             '--internal', action="store_false", default=None, dest="external",
             help="limit issues to org users")
 
+        ordering = self.parser.add_mutually_exclusive_group(required=False)
+        ordering.add_argument(
+            '--descending', "--oldest-last", action="store_true", default=False, dest="descending")
+        ordering.add_argument(
+            '--ascending', "--oldest-first", action="store_false", default=False, dest="descending")
+
+        # created:<2011-01-01
+        self.parser.add_argument("--extra", nargs="*", default=())
+
     def __call__(self, args):
         super(GitHubIssues, self).__call__(args)
         self.login(args)
         for org in args.orgs:
-            query = "is:open"
+            query = " ".join(args.extra)
+            query += " is:open"
             query += " is:issue"
             query += " user:%s" % org
             query += " archived:false"
@@ -3071,10 +3081,11 @@ class GitHubIssues(GitHubCommand):
                         ))
 
                 print("##", org.login, "(%s)" % count, "##")
-                for month in sorted(grouped_issues):
-                    issues = sorted(grouped_issues[month])
+
+                for month in sorted(grouped_issues, reverse=args.descending):
+                    issues = sorted(grouped_issues[month], reverse=args.descending)
                     print("## %s" % month)
-                    print("\n".join(sorted(issues)))
+                    print("\n".join(sorted(issues, reverse=args.descending)))
 
 
 class UnsubscribedRepos(GitHubCommand):
