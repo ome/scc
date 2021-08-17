@@ -38,6 +38,7 @@ from .git import CheckPRs
 from .git import CheckStatus
 from .git import DeleteTags
 from .git import GitHubIssues
+from .git import GitHubRepos
 from .git import Label
 from .git import Merge
 from .git import MilestoneCommand
@@ -48,7 +49,6 @@ from .git import SetCommitStatus
 from .git import TagRelease
 from .git import Token
 from .git import TravisMerge
-from .git import UnsubscribedRepos
 from .git import UpdateSubmodules
 from .deploy import Deploy
 from .version import Version
@@ -70,6 +70,7 @@ def entry_point():
             (DeleteTags.NAME, DeleteTags),
             (Label.NAME, Label),
             (GitHubIssues.NAME, GitHubIssues),
+            (GitHubRepos.NAME, GitHubRepos),
             (Merge.NAME, Merge),
             (MilestoneCommand.NAME, MilestoneCommand),
             (PushCommand.NAME, PushCommand),
@@ -80,7 +81,6 @@ def entry_point():
             (TagRelease.NAME, TagRelease),
             (TravisMerge.NAME, TravisMerge),
             (Version.NAME, Version),
-            (UnsubscribedRepos.NAME, UnsubscribedRepos),
             (UpdateSubmodules.NAME, UpdateSubmodules),
             ])
     except Stop as stop:

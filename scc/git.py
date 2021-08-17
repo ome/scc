@@ -3077,34 +3077,38 @@ class GitHubIssues(GitHubCommand):
                     print("\n".join(sorted(issues)))
 
 
-class UnsubscribedRepos(GitHubCommand):
+class GitHubRepos(GitHubCommand):
     """
     Find repositories which the current user is not subscribed to
     """
 
-    NAME = "unsubscribed-repos"
+    NAME = "repos"
 
     def __init__(self, sub_parsers):
-        super(UnsubscribedRepos, self).__init__(sub_parsers)
+        super(GitHubRepos, self).__init__(sub_parsers)
 
         self.parser.add_argument(
             'orgs', nargs="+",
             help="organizations that should be checked")
+        self.parser.add_argument(
+            '--unsubscribed', action="store_true",
+            help="Filter repos that the user is subscribed to")
 
     def __call__(self, args):
-        super(UnsubscribedRepos, self).__call__(args)
+        super(GitHubRepos, self).__call__(args)
         self.login(args)
         login = self.gh.get_login()
         for org in args.orgs:
             print(org)
             org = self.gh.get_organization(org)
             for repo in org.get_repos():
-                found = False
-                for user in repo.get_subscribers():
-                    if user.login == login:
-                        found = True
-                        break
-                if not found:
+                filter = False
+                if args.unsubscribed:
+                    for user in repo.get_subscribers():
+                        if user.login == login:
+                            filter = True
+                            break
+                if not filter:
                     print("\t", repo.name)
 
 
