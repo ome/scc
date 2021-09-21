@@ -4033,3 +4033,158 @@ class TagRelease(_TagCommands):
             user = self.gh.get_login()
             remote = "git@github.com:%s/" % (user) + "%s.git"
             self.main_repo.rpush('--tags', remote, force=True)
+
+
+class BumpVersionConda(GitRepoCommand):
+    """
+    Bump the versions and the sha256 of the package the conda repository is for
+    e.g. conda-omero-py -> omero-py
+    """
+
+    NAME = "bump-version-conda"
+    META_FILE = "meta.yaml"
+    PREFIX = "{% set "
+    SUFFIX = " %}"
+    GITHUB_URL = "https://github.com/"
+
+    def __init__(self, sub_parsers):
+        super(BumpVersionConda, self).__init__(sub_parsers)
+
+        self.parser.add_argument(
+            '--repo', '-r', type=str,
+            help='Target repository e.g. ome/omero-py')
+        self.parser.add_argument(
+            '--push', action='store_true',
+            help='Open PR to GitHub')
+
+    def __call__(self, args):
+        super(BumpVersionConda, self).__call__(args)
+        from ruamel.yaml import YAML
+        yaml = YAML(typ='jinja2')
+        yaml.preserve_quotes = True
+        data, jinja2 = self.extact_metadata(".", yaml)
+        if args.repo:
+            url = self.GITHUB_URL + args.repository
+        else:
+            url = self.GITHUB_URL + "ome/%s" % jinja2["name"]
+        # Find the GitHub tag and sha256
+        output = self.get_latest_tag_and_sha256_from_github(url)
+        latest_tag = self.parse_tag(output[1])
+        if jinja2["version"] != latest_tag:
+            # default is the sha256 from the latest tag
+            sha_256 = output[0]
+            # find which sha256 we need to get
+            if "pypi" in data["source"]["url"]:
+                sha_256 = self.get_sha256_from_pypi(jinja2["name"], latest_tag)
+            elif "downloads" in data["source"]["url"]:
+                result = re.search('{{(.*)}}', data["source"]["url"])
+                values = url.split("{{%s}}" % result.group(1))
+                sha_256 = self.get_sha256_from_downloads(values[0], values[1], latest_tag)
+            # Modify the meta.yaml file(s)
+            if data["source"]["sha256"]:
+                data["source"]["sha256"] = sha_256
+            self.update_data(".", yaml, latest_tag, sha_256, data)
+            self.commit("Update version to %s" % latest_tag)
+
+    def commit(self, msg):
+        p = subprocess.Popen(["git", "add", "-A"])
+        rc = p.wait()
+        if rc != 0:
+            raise Exception("'git add failed")
+        p = subprocess.Popen(["git", "commit", "-m", msg])
+        rc = p.wait()
+        if rc != 0:
+            raise Exception("'git commit failed")
+
+    def extact_metadata(self, directory, yaml):
+        """
+        Scan the directory and parse the content of the first meta.yaml file found.
+        """
+        for (dirpath, dirnames, filenames) in os.walk(directory):
+            for fn in filenames:
+                if fn == self.META_FILE:
+                    # identifies the name of the repository to target to find
+                    # find the source to read: 
+                    # read the json
+                    jinja2 = {}
+                    with open(fn) as fp:
+                        data = yaml.load(fp)
+                    # find information about the repository
+                    with open(fn) as file:
+                        for line in file:
+                            if line.startswith(self.PREFIX):
+                                values = self.replace(line)
+                                jinja2[values[0]] = values[1].replace("\"", "")
+                    return (data, jinja2)
+
+    def replace(self, line):
+        """
+        Clean up the line
+        """
+        return line.replace(self.PREFIX, "").replace(self.SUFFIX, "").replace(" ", "").replace("\n", "").split("=")
+
+    def get_latest_tag_and_sha256_from_github(self, repo_url):
+        """
+        Return the latest tag and the sha256 for the given repository.
+        """
+        command = "git ls-remote --refs --tags --sort=\"version:refname\" %s | tail -n1" % repo_url
+        process = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE,
+                                 universal_newlines=True)
+        return process.stdout.split("\t")
+
+    def get_sha256_from_pypi(self, repo_name, tag, extension=".tar.gz"):
+        """
+        Read the sha256 from pypi.
+        """
+        import requests
+        r = requests.get('https://pypi.org/pypi/%s/json' % repo_name)
+        json = r.json()
+        # parse the json to extract the sha256
+        release = json["releases"][tag]
+        for v in json["releases"][tag]:
+            if v["filename"].endswith(extension):
+                return v["digests"]["sha256"]
+
+    def get_sha256_from_downloads(self, start, end, tag, extension=".sha1"):
+        """
+        Read the sha256 from downloads.openmicroscopy.org.
+        """
+        import urllib.request
+        import tempfile
+        try:
+            tf = tempfile.NamedTemporaryFile()
+            urllib.request.urlretrieve('%s/%s/%s%s' % (start, tag, end, extension), tf.name)
+            with open(tf) as file:
+                lines = list(file)
+                for l in lines:
+                    return l.split(" ")[0]
+        finally:
+            tf.close()
+
+    def parse_tag(self, value):
+        """ Parse the tag i.e. remove spaces etc."""
+        return value.split("/")[-1].replace("v", "").replace("\n", "")
+
+    def update_data(self, directory, yaml, version, sha256, data):
+        """
+        Update version and sha256 in meta.yaml
+        """
+        import fileinput
+        for (dirpath, dirnames, filenames) in os.walk(directory):
+            for fn in filenames:
+                if fn == self.META_FILE:
+                    print(data)
+                    with open(fn, "w") as fp:
+                       yaml.dump(data, fp)
+                    with fileinput.input(files=(fn), inplace=True) as f:
+                        for line in f:
+                            if line.startswith(self.PREFIX):
+                                values = self.replace(line)
+                                new_line = line
+                                if values[0] == "version":
+                                    new_line = line.replace(values[1], version)
+                                elif values[0] == "sha256":
+                                    new_line = line.replace(values[1], sha256)
+                                print(new_line, end='')
+                            else:
+                                print(line, end='')
