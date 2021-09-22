@@ -4086,7 +4086,8 @@ class BumpVersionConda(GitRepoCommand):
             elif "downloads" in data["source"]["url"]:
                 result = re.search('{{(.*)}}', data["source"]["url"])
                 values = url.split("{{%s}}" % result.group(1))
-                sha_256 = self.get_sha256_from_downloads(values[0], values[1], latest_tag)
+                sha_256 = self.get_sha256_from_downloads(values[0], values[1],
+                                                         latest_tag)
             # Modify the meta.yaml file(s)
             if data["source"]["sha256"]:
                 data["source"]["sha256"] = sha_256
@@ -4112,14 +4113,12 @@ class BumpVersionConda(GitRepoCommand):
 
     def extact_metadata(self, directory, yaml):
         """
-        Scan the directory and parse the content of the first meta.yaml file found.
+        Scan the directory and parse the content of the first
+        meta.yaml file found.
         """
         for (dirpath, dirnames, filenames) in os.walk(directory):
             for fn in filenames:
                 if fn == self.META_FILE:
-                    # identifies the name of the repository to target to find
-                    # find the source to read: 
-                    # read the json
                     jinja2 = {}
                     with open(fn) as fp:
                         data = yaml.load(fp)
@@ -4136,14 +4135,16 @@ class BumpVersionConda(GitRepoCommand):
         """
         Clean up the line
         """
-        return line.replace(self.PREFIX, "").replace(self.SUFFIX, "").replace(" ", "").replace("\n", "").split("=")
+        v = line.replace(self.PREFIX, "").replace(self.SUFFIX, "")
+        return v.replace(" ", "").replace("\n", "").split("=")
 
     def get_latest_tag_and_sha256_from_github(self, repo_url):
         """
         Return the latest tag and the sha256 for the given repository.
         """
-        command = "git ls-remote --refs --tags --sort=\"version:refname\" %s | tail -n1" % repo_url
-        process = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE,
+        command = "git ls-remote --refs --tags --sort=\"version:refname\" %s | tail -n1" % repo_url  # noqa
+        process = subprocess.run(command, shell=True, check=True,
+                                 stdout=subprocess.PIPE,
                                  universal_newlines=True)
         return process.stdout.split("\t")
 
@@ -4155,7 +4156,6 @@ class BumpVersionConda(GitRepoCommand):
         r = requests.get('https://pypi.org/pypi/%s/json' % repo_name)
         json = r.json()
         # parse the json to extract the sha256
-        release = json["releases"][tag]
         for v in json["releases"][tag]:
             if v["filename"].endswith(extension):
                 return v["digests"]["sha256"]
@@ -4164,15 +4164,15 @@ class BumpVersionConda(GitRepoCommand):
         """
         Read the sha256 from downloads.openmicroscopy.org.
         """
-        import urllib.request
+        from urllib.request import urlretrieve
         import tempfile
         try:
             tf = tempfile.NamedTemporaryFile()
-            urllib.request.urlretrieve('%s/%s/%s%s' % (start, tag, end, extension), tf.name)
+            urlretrieve('%s/%s/%s%s' % (start, tag, end, extension), tf.name)
             with open(tf) as file:
                 lines = list(file)
-                for l in lines:
-                    return l.split(" ")[0]
+                for line in lines:
+                    return line.split(" ")[0]
         finally:
             tf.close()
 
@@ -4189,7 +4189,7 @@ class BumpVersionConda(GitRepoCommand):
             for fn in filenames:
                 if fn == self.META_FILE:
                     with open(fn, "w") as fp:
-                       yaml.dump(data, fp)
+                        yaml.dump(data, fp)
                     with fileinput.input(files=(fn), inplace=True) as f:
                         for line in f:
                             if line.startswith(self.PREFIX):
