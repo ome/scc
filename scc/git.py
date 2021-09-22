@@ -4071,7 +4071,7 @@ class BumpVersionConda(GitRepoCommand):
             return
 
         if args.repo:
-            url = self.GITHUB_URL + args.repository
+            url = self.GITHUB_URL + args.repo
         else:
             if self.KEY_NAME in jinja2.keys():
                 url = self.GITHUB_URL + "ome/%s" % jinja2[self.KEY_NAME]
