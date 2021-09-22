@@ -4084,7 +4084,7 @@ class BumpVersionConda(GitRepoCommand):
             self.log.info("URL %s not valid" % url)
             return
         latest_tag = self.parse_tag(output[1])
-        if (jinja2[self.KEY_VERSION] != latest_tag or
+        if ((self.KEY_VERSION in jinja2.keys() and jinja2[self.KEY_VERSION] != latest_tag) or
            data["package"][self.KEY_VERSION] != latest_tag):
             # default is the sha256 from the latest tag
             sha_256 = output[0]
@@ -4093,10 +4093,7 @@ class BumpVersionConda(GitRepoCommand):
                 sha_256 = self.get_sha256_from_pypi(jinja2[self.KEY_NAME],
                                                     latest_tag)
             elif "downloads" in data["source"]["url"]:
-                result = re.search('{{(.*)}}', data["source"]["url"])
-                values = url.split("{{%s}}" % result.group(1))
-                sha_256 = self.get_sha256_from_downloads(values[0], values[1],
-                                                         latest_tag)
+                sha_256 = self.get_sha256_from_downloads(data, latest_tag)
             # Modify the meta.yaml file(s)
             if data["source"][self.KEY_SHA]:
                 data["source"][self.KEY_SHA] = sha_256
@@ -4168,15 +4165,20 @@ class BumpVersionConda(GitRepoCommand):
             if v["filename"].endswith(extension):
                 return v["digests"]["sha256"]
 
-    def get_sha256_from_downloads(self, start, end, tag, extension=".sha1"):
+    def get_sha256_from_downloads(self, data, tag, extension=".sha1"):
         """
         Read the sha256 from downloads.openmicroscopy.org.
         """
+        url = data["source"]["url"]
+        # {{ are replaced by <{ when reading the yaml file 
+        # (sanitize) then reverted to {{ during the dump
+        result = re.search('<{(.*)}}', data["source"]["url"])
+        url = url.replace("<{%s}}" % result.group(1), tag)
         from urllib.request import urlretrieve
         import tempfile
         try:
             tf = tempfile.NamedTemporaryFile()
-            urlretrieve('%s/%s/%s%s' % (start, tag, end, extension), tf.name)
+            urlretrieve('%s%s' % (url, extension), tf.name)
             with open(tf) as file:
                 lines = list(file)
                 for line in lines:
