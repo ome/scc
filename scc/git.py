@@ -4063,12 +4063,19 @@ class BumpVersionConda(GitRepoCommand):
         yaml = YAML(typ='jinja2')
         yaml.preserve_quotes = True
         data, jinja2 = self.extact_metadata(".", yaml)
+        if data is None or jinja2 is None:
+            self.log.info("no %s files found" % self.META_FILE)
+            return
+
         if args.repo:
             url = self.GITHUB_URL + args.repository
         else:
             url = self.GITHUB_URL + "ome/%s" % jinja2["name"]
         # Find the GitHub tag and sha256
         output = self.get_latest_tag_and_sha256_from_github(url)
+        if len(output) < 2:
+            self.log.info("URL %s not valid" % url)
+            return
         latest_tag = self.parse_tag(output[1])
         if jinja2["version"] != latest_tag:
             # default is the sha256 from the latest tag
@@ -4093,10 +4100,15 @@ class BumpVersionConda(GitRepoCommand):
         rc = p.wait()
         if rc != 0:
             raise Exception("'git add failed")
-        p = subprocess.Popen(["git", "commit", "-m", msg])
-        rc = p.wait()
-        if rc != 0:
-            raise Exception("'git commit failed")
+        # Check status
+        p = subprocess.Popen(["git", "status"])
+        output, error = p.communicate()
+        if p.returncode != 0:
+            if output not in "nothing to commit":
+                p = subprocess.Popen(["git", "commit", "-m", msg])
+                rc = p.wait()
+                if rc != 0:
+                    raise Exception("'git commit failed")
 
     def extact_metadata(self, directory, yaml):
         """
@@ -4118,6 +4130,7 @@ class BumpVersionConda(GitRepoCommand):
                                 values = self.replace(line)
                                 jinja2[values[0]] = values[1].replace("\"", "")
                     return (data, jinja2)
+        return (None, None)
 
     def replace(self, line):
         """
