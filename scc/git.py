@@ -4046,6 +4046,9 @@ class BumpVersionConda(GitRepoCommand):
     PREFIX = "{% set "
     SUFFIX = " %}"
     GITHUB_URL = "https://github.com/"
+    KEY_NAME = "name"
+    KEY_VERSION = "version"
+    KEY_SHA = "sha256"
 
     def __init__(self, sub_parsers):
         super(BumpVersionConda, self).__init__(sub_parsers)
@@ -4070,27 +4073,35 @@ class BumpVersionConda(GitRepoCommand):
         if args.repo:
             url = self.GITHUB_URL + args.repository
         else:
-            url = self.GITHUB_URL + "ome/%s" % jinja2["name"]
+            if self.KEY_NAME in jinja2.keys():
+                url = self.GITHUB_URL + "ome/%s" % jinja2[self.KEY_NAME]
+            else:
+                self.log.info("no valid url found in %s" % self.META_FILE)
+                return
         # Find the GitHub tag and sha256
         output = self.get_latest_tag_and_sha256_from_github(url)
         if len(output) < 2:
             self.log.info("URL %s not valid" % url)
             return
         latest_tag = self.parse_tag(output[1])
-        if jinja2["version"] != latest_tag:
+        if (jinja2[self.KEY_VERSION] != latest_tag or
+           data["package"][self.KEY_VERSION] != latest_tag):
             # default is the sha256 from the latest tag
             sha_256 = output[0]
             # find which sha256 we need to get
             if "pypi" in data["source"]["url"]:
-                sha_256 = self.get_sha256_from_pypi(jinja2["name"], latest_tag)
+                sha_256 = self.get_sha256_from_pypi(jinja2[self.KEY_NAME],
+                                                    latest_tag)
             elif "downloads" in data["source"]["url"]:
                 result = re.search('{{(.*)}}', data["source"]["url"])
                 values = url.split("{{%s}}" % result.group(1))
                 sha_256 = self.get_sha256_from_downloads(values[0], values[1],
                                                          latest_tag)
             # Modify the meta.yaml file(s)
-            if data["source"]["sha256"]:
-                data["source"]["sha256"] = sha_256
+            if data["source"][self.KEY_SHA]:
+                data["source"][self.KEY_SHA] = sha_256
+            if data["package"][self.KEY_VERSION]:
+                data["source"][self.KEY_SHA] = sha_256 
             self.update_data(".", yaml, latest_tag, sha_256, data)
             self.commit("Update version to %s" % latest_tag)
         else:
@@ -4102,14 +4113,10 @@ class BumpVersionConda(GitRepoCommand):
         if rc != 0:
             raise Exception("'git add failed")
         # Check status
-        p = subprocess.Popen(["git", "status"])
-        output, error = p.communicate()
-        if p.returncode != 0:
-            if output not in "nothing to commit":
-                p = subprocess.Popen(["git", "commit", "-m", msg])
-                rc = p.wait()
-                if rc != 0:
-                    raise Exception("'git commit failed")
+        p = subprocess.Popen(["git", "commit", "-m", msg])
+        rc = p.wait()
+        if rc != 0:
+            raise Exception("'git commit failed")
 
     def extact_metadata(self, directory, yaml):
         """
@@ -4119,11 +4126,12 @@ class BumpVersionConda(GitRepoCommand):
         for (dirpath, dirnames, filenames) in os.walk(directory):
             for fn in filenames:
                 if fn == self.META_FILE:
+                    fullpath = os.path.join(dirpath, fn)
                     jinja2 = {}
-                    with open(fn) as fp:
+                    with open(fullpath) as fp:
                         data = yaml.load(fp)
                     # find information about the repository
-                    with open(fn) as file:
+                    with open(fullpath) as file:
                         for line in file:
                             if line.startswith(self.PREFIX):
                                 values = self.replace(line)
@@ -4188,16 +4196,17 @@ class BumpVersionConda(GitRepoCommand):
         for (dirpath, dirnames, filenames) in os.walk(directory):
             for fn in filenames:
                 if fn == self.META_FILE:
-                    with open(fn, "w") as fp:
+                    fullpath = os.path.join(dirpath, fn)
+                    with open(fullpath, "w") as fp:
                         yaml.dump(data, fp)
-                    with fileinput.input(files=(fn), inplace=True) as f:
+                    with fileinput.input(files=(fullpath), inplace=True) as f:
                         for line in f:
                             if line.startswith(self.PREFIX):
                                 values = self.replace(line)
                                 new_line = line
-                                if values[0] == "version":
+                                if values[0] == self.KEY_VERSION:
                                     new_line = line.replace(values[1], version)
-                                elif values[0] == "sha256":
+                                elif values[0] == self.KEY_SHA:
                                     new_line = line.replace(values[1], sha256)
                                 print(new_line, end='')
                             else:
