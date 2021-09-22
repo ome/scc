@@ -4085,6 +4085,8 @@ class BumpVersionConda(GitRepoCommand):
                 data["source"]["sha256"] = sha_256
             self.update_data(".", yaml, latest_tag, sha_256, data)
             self.commit("Update version to %s" % latest_tag)
+        else:
+            self.log.info("no new version")
 
     def commit(self, msg):
         p = subprocess.Popen(["git", "add", "-A"])
@@ -4173,7 +4175,6 @@ class BumpVersionConda(GitRepoCommand):
         for (dirpath, dirnames, filenames) in os.walk(directory):
             for fn in filenames:
                 if fn == self.META_FILE:
-                    print(data)
                     with open(fn, "w") as fp:
                        yaml.dump(data, fp)
                     with fileinput.input(files=(fn), inplace=True) as f:
