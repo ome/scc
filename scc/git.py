@@ -4099,7 +4099,7 @@ class BumpVersionConda(GitRepoCommand):
             if data["source"][self.KEY_SHA]:
                 data["source"][self.KEY_SHA] = sha_256
             if data["package"][self.KEY_VERSION]:
-                data["source"][self.KEY_SHA] = sha_256 
+                data["package"][self.KEY_VERSION] = latest_tag 
             self.update_data(".", yaml, latest_tag, sha_256, data)
             self.commit("Update version to %s" % latest_tag)
         else:
@@ -4177,15 +4177,12 @@ class BumpVersionConda(GitRepoCommand):
         url = url.replace("<{%s}}" % result.group(1), tag)
         from urllib.request import urlretrieve
         import tempfile
-        try:
-            tf = tempfile.NamedTemporaryFile()
+        with tempfile.NamedTemporaryFile(mode = "r") as tf:
             urlretrieve('%s%s' % (url, extension), tf.name)
-            with open(tf) as file:
-                lines = list(file)
-                for line in lines:
-                    return line.split(" ")[0]
-        finally:
-            tf.close()
+            lines = list(tf)
+            for line in lines:
+                print(line)
+                return line.split(" ")[0]
 
     def parse_tag(self, value):
         """ Parse the tag i.e. remove spaces etc."""
