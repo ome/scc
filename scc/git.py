@@ -4080,6 +4080,7 @@ class BumpVersionConda(GitRepoCommand):
                 return
         # Find the GitHub tag and sha256
         output = self.get_latest_tag_and_sha256_from_github(url)
+        print(output)
         if len(output) < 2:
             self.log.info("URL %s not valid" % url)
             return
@@ -4147,7 +4148,7 @@ class BumpVersionConda(GitRepoCommand):
         """
         Return the latest tag and the sha256 for the given repository.
         """
-        command = "git ls-remote --refs --tags --sort=\"version:refname\" %s | tail -n1" % repo_url  # noqa
+        command = "git ls-remote --refs --tags --sort=\"version:refname\" %s | grep -v 'v*.rc[0-9]\+$' | grep -v 'v*.dev[0-9]\+$' | grep 'v*\.' |grep -v 'v*.-m[0-9]\+$' | tail -n1" % repo_url  # noqa
         process = subprocess.run(command, shell=True, check=True,
                                  stdout=subprocess.PIPE,
                                  universal_newlines=True)
