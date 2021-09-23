@@ -4096,9 +4096,9 @@ class BumpVersionConda(GitRepoCommand):
             elif "downloads" in data["source"]["url"]:
                 sha_256 = self.get_sha256_from_downloads(data, latest_tag)
             # Modify the meta.yaml file(s)
-            if data["source"][self.KEY_SHA]:
+            if data["source"][self.KEY_SHA] and self.KEY_SHA not in jinja2.keys():
                 data["source"][self.KEY_SHA] = sha_256
-            if data["package"][self.KEY_VERSION]:
+            if data["package"][self.KEY_VERSION] and self.KEY_VERSION not in jinja2.keys():
                 data["package"][self.KEY_VERSION] = latest_tag 
             self.update_data(".", yaml, latest_tag, sha_256, data)
             self.commit("Update version to %s" % latest_tag)
@@ -4110,6 +4110,12 @@ class BumpVersionConda(GitRepoCommand):
         rc = p.wait()
         if rc != 0:
             raise Exception("'git add failed")
+        p = subprocess.Popen(["git", "status"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output, error = p.communicate()
+        if b"nothing to commit" in output:
+            print("OK %s" % output)
+            self.log.info("Nothing to commit")
+            return
         p = subprocess.Popen(["git", "commit", "-m", msg])
         rc = p.wait()
         if rc != 0:
