@@ -4080,10 +4080,10 @@ class BumpVersionConda(GitRepoCommand):
                 return
         # Find the GitHub tag and sha256
         output = self.get_latest_tag_and_sha256_from_github(url)
-        print(output)
         if len(output) < 2:
             self.log.info("URL %s not valid" % url)
             return
+
         latest_tag = self.parse_tag(output[1])
         if ((self.KEY_VERSION in jinja2.keys() and jinja2[self.KEY_VERSION] != latest_tag) or
            data["package"][self.KEY_VERSION] != latest_tag):
@@ -4110,7 +4110,6 @@ class BumpVersionConda(GitRepoCommand):
         rc = p.wait()
         if rc != 0:
             raise Exception("'git add failed")
-        # Check status
         p = subprocess.Popen(["git", "commit", "-m", msg])
         rc = p.wait()
         if rc != 0:
