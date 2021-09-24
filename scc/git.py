@@ -4056,9 +4056,6 @@ class BumpVersionConda(GitRepoCommand):
         self.parser.add_argument(
             '--repo', '-r', type=str,
             help='Target repository e.g. ome/omero-py')
-        self.parser.add_argument(
-            '--push', action='store_true',
-            help='Open PR to GitHub')
 
     def __call__(self, args):
         super(BumpVersionConda, self).__call__(args)
