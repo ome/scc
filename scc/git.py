@@ -4087,8 +4087,11 @@ class BumpVersionConda(GitRepoCommand):
                 sha = self.get_sha256_from_pypi(jinja2[self.KEY_NAME],
                                                     latest_tag)
             elif "downloads" in data["source"]["url"]:
-                sha = self.get_sha256_from_downloads(data, latest_tag)
+                sha = self.get_sha_from_downloads(data, latest_tag)
+            elif "github" in data["source"]["url"]:
+                sha = self.get_sha_from_github(jinja2[self.KEY_NAME], data, latest_tag)
             # Modify the meta.yaml file(s)
+            print(sha)
             if data["source"][self.KEY_SHA] and self.KEY_SHA not in jinja2.keys():
                 data["source"][self.KEY_SHA] = sha
             if data["package"][self.KEY_VERSION] and self.KEY_VERSION not in jinja2.keys():
@@ -4180,6 +4183,33 @@ class BumpVersionConda(GitRepoCommand):
             lines = list(tf)
             for line in lines:
                 return line.split(" ")[0]
+
+    def get_sha_from_github(self, repo_name, data, tag, extension=".zip"):
+        # Download file from github
+        url = data["source"]["url"]
+        # {{ are replaced by <{ when reading the yaml file 
+        # (sanitize) then reverted to {{ during the dump
+        #result = re.search('<{(.*)}}', url)
+        url = url.replace("<{ name }}", repo_name)
+        url = url.replace("<{ version }}", tag)
+        import hashlib, urllib, shutil, zipfile
+        file_name = '%s%s' % (tag, extension)
+
+        with urllib.request.urlopen(url) as response, \
+             open(file_name, 'wb') as out_file:
+            shutil.copyfileobj(response, out_file)
+            with zipfile.ZipFile(file_name) as zf:
+                zf.extractall()
+        h = hashlib.sha256()
+        with open(file_name, 'rb') as f:
+            while True:
+                chunk = f.read(h.block_size)
+                if not chunk:
+                    break
+                h.update(chunk)
+        os.remove(file_name)
+        return h.hexdigest()
+
 
     def parse_tag(self, value):
         """ Parse the tag i.e. remove spaces etc."""
