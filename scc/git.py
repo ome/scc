@@ -4077,11 +4077,10 @@ class BumpVersionConda(GitRepoCommand):
                 return
         # Find the GitHub tag
         output = self.get_latest_tag_from_github(url)
-        if len(output) < 2:
-            self.log.info("URL %s not valid" % url)
-            return
+        if output is None:
+            raise Stop(1, "URL %s not valid" % url)
 
-        latest_tag = self.parse_tag(output[1])
+        latest_tag = self.parse_tag(output)
         if ((self.KEY_VERSION in jinja2.keys() and jinja2[self.KEY_VERSION] != latest_tag) or
            data["package"][self.KEY_VERSION] != latest_tag):
             sha = ""
@@ -4153,7 +4152,7 @@ class BumpVersionConda(GitRepoCommand):
         process = subprocess.run(command, shell=True, check=True,
                                  stdout=subprocess.PIPE,
                                  universal_newlines=True)
-        return process.stdout.split("\t")
+        return None # process.stdout.split("\t")[1]
 
     def get_sha256_from_pypi(self, repo_name, tag, extension=".tar.gz"):
         """
