@@ -4109,7 +4109,6 @@ class BumpVersionConda(GitRepoCommand):
         p = subprocess.Popen(["git", "status"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, error = p.communicate()
         if b"nothing to commit" in output:
-            print("OK %s" % output)
             self.log.info("Nothing to commit")
             return
         p = subprocess.Popen(["git", "commit", "-m", msg])
