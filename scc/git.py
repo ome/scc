@@ -4064,8 +4064,7 @@ class BumpVersionConda(GitRepoCommand):
         yaml.preserve_quotes = True
         data, jinja2 = self.extact_metadata(".", yaml)
         if data is None or jinja2 is None:
-            self.log.info("no %s files found" % self.META_FILE)
-            return
+            raise Stop(1, "No %s files found" % self.META_FILE)
 
         if args.repo:
             url = self.GITHUB_URL + args.repo
@@ -4073,8 +4072,7 @@ class BumpVersionConda(GitRepoCommand):
             if self.KEY_NAME in jinja2.keys():
                 url = self.GITHUB_URL + "ome/%s" % jinja2[self.KEY_NAME]
             else:
-                self.log.info("no valid url found in %s" % self.META_FILE)
-                return
+                raise Stop(1, "No valid url found in %s" % self.META_FILE)
         # Find the GitHub tag
         output = self.get_latest_tag_from_github(url)
         if output is None:
@@ -4152,7 +4150,7 @@ class BumpVersionConda(GitRepoCommand):
         process = subprocess.run(command, shell=True, check=True,
                                  stdout=subprocess.PIPE,
                                  universal_newlines=True)
-        return None # process.stdout.split("\t")[1]
+        return process.stdout.split("\t")[1]
 
     def get_sha256_from_pypi(self, repo_name, tag, extension=".tar.gz"):
         """
