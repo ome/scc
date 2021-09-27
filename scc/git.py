@@ -4075,8 +4075,8 @@ class BumpVersionConda(GitRepoCommand):
             else:
                 self.log.info("no valid url found in %s" % self.META_FILE)
                 return
-        # Find the GitHub tag and sha256
-        output = self.get_latest_tag_and_sha256_from_github(url)
+        # Find the GitHub tag
+        output = self.get_latest_tag_from_github(url)
         if len(output) < 2:
             self.log.info("URL %s not valid" % url)
             return
@@ -4084,20 +4084,19 @@ class BumpVersionConda(GitRepoCommand):
         latest_tag = self.parse_tag(output[1])
         if ((self.KEY_VERSION in jinja2.keys() and jinja2[self.KEY_VERSION] != latest_tag) or
            data["package"][self.KEY_VERSION] != latest_tag):
-            # default is the sha256 from the latest tag
-            sha_256 = output[0]
-            # find which sha256 we need to get
+            sha = ""
+            # find which sha we need to get
             if "pypi" in data["source"]["url"]:
-                sha_256 = self.get_sha256_from_pypi(jinja2[self.KEY_NAME],
+                sha = self.get_sha256_from_pypi(jinja2[self.KEY_NAME],
                                                     latest_tag)
             elif "downloads" in data["source"]["url"]:
-                sha_256 = self.get_sha256_from_downloads(data, latest_tag)
+                sha = self.get_sha256_from_downloads(data, latest_tag)
             # Modify the meta.yaml file(s)
             if data["source"][self.KEY_SHA] and self.KEY_SHA not in jinja2.keys():
-                data["source"][self.KEY_SHA] = sha_256
+                data["source"][self.KEY_SHA] = sha
             if data["package"][self.KEY_VERSION] and self.KEY_VERSION not in jinja2.keys():
                 data["package"][self.KEY_VERSION] = latest_tag 
-            self.update_data(".", yaml, latest_tag, sha_256, data)
+            self.update_data(".", yaml, latest_tag, sha, data)
             self.commit("Update version to %s" % latest_tag)
         else:
             self.log.info("no new version")
@@ -4146,9 +4145,9 @@ class BumpVersionConda(GitRepoCommand):
         v = line.replace(self.PREFIX, "").replace(self.SUFFIX, "")
         return v.replace(" ", "").replace("\n", "").split("=")
 
-    def get_latest_tag_and_sha256_from_github(self, repo_url):
+    def get_latest_tag_from_github(self, repo_url):
         """
-        Return the latest tag and the sha256 for the given repository.
+        Return the latest tag for the given repository.
         """
         command = "git ls-remote --refs --tags --sort=\"version:refname\" %s | grep -v 'v*.rc[0-9]\+$' | grep -v 'v*.dev[0-9]\+$' | grep 'v*\.' |grep -v 'v*.-m[0-9]\+$' | tail -n1" % repo_url  # noqa
         process = subprocess.run(command, shell=True, check=True,
@@ -4168,9 +4167,9 @@ class BumpVersionConda(GitRepoCommand):
             if v["filename"].endswith(extension):
                 return v["digests"]["sha256"]
 
-    def get_sha256_from_downloads(self, data, tag, extension=".sha1"):
+    def get_sha_from_downloads(self, data, tag, extension=".sha1"):
         """
-        Read the sha256 from downloads.openmicroscopy.org.
+        Read the sha from downloads.openmicroscopy.org.
         """
         url = data["source"]["url"]
         # {{ are replaced by <{ when reading the yaml file 
@@ -4192,7 +4191,7 @@ class BumpVersionConda(GitRepoCommand):
 
     def update_data(self, directory, yaml, version, sha256, data):
         """
-        Update version and sha256 in meta.yaml
+        Update version and sha256 values in meta.yaml
         """
         import fileinput
         for (dirpath, dirnames, filenames) in os.walk(directory):
