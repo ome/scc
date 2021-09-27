@@ -4179,7 +4179,6 @@ class BumpVersionConda(GitRepoCommand):
             urlretrieve('%s%s' % (url, extension), tf.name)
             lines = list(tf)
             for line in lines:
-                print(line)
                 return line.split(" ")[0]
 
     def parse_tag(self, value):
