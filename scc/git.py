@@ -4091,25 +4091,17 @@ class BumpVersionConda(GitRepoCommand):
                                                data, latest_tag)
             # Modify the meta.yaml file(s)
             self.update_data(".", jinja2, latest_tag, sha)
-            self.commit("Update version to %s" % latest_tag)
+            self.commit(".", "Update version to %s" % latest_tag)
         else:
             self.log.info("no new version")
 
-    def commit(self, msg):
-        p = subprocess.Popen(["git", "add", "-A"])
-        rc = p.wait()
-        if rc != 0:
-            raise Exception("'git add failed")
-        p = subprocess.Popen(["git", "status"], stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
-        output, error = p.communicate()
-        if b"nothing to commit" in output:
-            self.log.info("Nothing to commit")
-            return
-        p = subprocess.Popen(["git", "commit", "-m", msg])
-        rc = p.wait()
-        if rc != 0:
-            raise Exception("'git commit failed")
+    def commit(self, directory, msg):
+        from scc.git import get_github, get_token_or_user
+        token = get_token_or_user(local=True)
+        gh = get_github(token, dont_ask=True)
+        gr = gh.git_repo(directory)
+        if gr.has_local_changes():
+            gr.call("git", "commit", "-a", "-n", "-m", msg)
 
     def extact_metadata(self, directory):
         """
@@ -4223,6 +4215,7 @@ class BumpVersionConda(GitRepoCommand):
                     fullpath = os.path.join(dirpath, fn)
                     yaml = YAML(typ='jinja2')
                     yaml.preserve_quotes = True
+                    yaml.indent(mapping=2)
                     # read the meta files and update the value
                     with open(fullpath) as fp:
                         data = yaml.load(fp)
