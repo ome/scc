@@ -4059,10 +4059,7 @@ class BumpVersionConda(GitRepoCommand):
 
     def __call__(self, args):
         super(BumpVersionConda, self).__call__(args)
-        from ruamel.yaml import YAML
-        yaml = YAML(typ='jinja2')
-        yaml.preserve_quotes = True
-        data, jinja2 = self.extact_metadata(".", yaml)
+        data, jinja2 = self.extact_metadata(".")
         if data is None or jinja2 is None:
             raise Stop(1, "No %s files found" % self.META_FILE)
 
@@ -4079,24 +4076,21 @@ class BumpVersionConda(GitRepoCommand):
             raise Stop(1, "URL %s not valid" % url)
 
         latest_tag = self.parse_tag(output)
-        if ((self.KEY_VERSION in jinja2.keys() and jinja2[self.KEY_VERSION] != latest_tag) or
+        if ((self.KEY_VERSION in jinja2.keys() and
+           jinja2[self.KEY_VERSION] != latest_tag) or
            data["package"][self.KEY_VERSION] != latest_tag):
             sha = ""
             # find which sha we need to get
             if "pypi" in data["source"]["url"]:
-                sha = self.get_sha256_from_pypi(jinja2[self.KEY_NAME],
-                                                    latest_tag)
+                sha = self.get_sha_from_pypi(jinja2[self.KEY_NAME],
+                                             latest_tag)
             elif "downloads" in data["source"]["url"]:
                 sha = self.get_sha_from_downloads(data, latest_tag)
             elif "github" in data["source"]["url"]:
-                sha = self.get_sha_from_github(jinja2[self.KEY_NAME], data, latest_tag)
+                sha = self.get_sha_from_github(jinja2[self.KEY_NAME],
+                                               data, latest_tag)
             # Modify the meta.yaml file(s)
-            print(sha)
-            if data["source"][self.KEY_SHA] and self.KEY_SHA not in jinja2.keys():
-                data["source"][self.KEY_SHA] = sha
-            if data["package"][self.KEY_VERSION] and self.KEY_VERSION not in jinja2.keys():
-                data["package"][self.KEY_VERSION] = latest_tag 
-            self.update_data(".", yaml, latest_tag, sha, data)
+            self.update_data(".", jinja2, latest_tag, sha)
             self.commit("Update version to %s" % latest_tag)
         else:
             self.log.info("no new version")
@@ -4106,7 +4100,8 @@ class BumpVersionConda(GitRepoCommand):
         rc = p.wait()
         if rc != 0:
             raise Exception("'git add failed")
-        p = subprocess.Popen(["git", "status"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = subprocess.Popen(["git", "status"], stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
         output, error = p.communicate()
         if b"nothing to commit" in output:
             self.log.info("Nothing to commit")
@@ -4116,19 +4111,22 @@ class BumpVersionConda(GitRepoCommand):
         if rc != 0:
             raise Exception("'git commit failed")
 
-    def extact_metadata(self, directory, yaml):
+    def extact_metadata(self, directory):
         """
         Scan the directory and parse the content of the first
         meta.yaml file found.
         """
+        from ruamel.yaml import YAML
+        yaml = YAML(typ='jinja2')
+        yaml.preserve_quotes = True
         for (dirpath, dirnames, filenames) in os.walk(directory):
             for fn in filenames:
                 if fn == self.META_FILE:
                     fullpath = os.path.join(dirpath, fn)
-                    jinja2 = {}
                     with open(fullpath) as fp:
                         data = yaml.load(fp)
                     # find information about the repository
+                    jinja2 = {}
                     with open(fullpath) as file:
                         for line in file:
                             if line.startswith(self.PREFIX):
@@ -4154,9 +4152,9 @@ class BumpVersionConda(GitRepoCommand):
                                  universal_newlines=True)
         return process.stdout.split("\t")[1]
 
-    def get_sha256_from_pypi(self, repo_name, tag, extension=".tar.gz"):
+    def get_sha_from_pypi(self, repo_name, tag, extension=".tar.gz"):
         """
-        Read the sha256 from pypi.
+        Read the sha from pypi.
         """
         import requests
         r = requests.get('https://pypi.org/pypi/%s/json' % repo_name)
@@ -4171,13 +4169,13 @@ class BumpVersionConda(GitRepoCommand):
         Read the sha from downloads.openmicroscopy.org.
         """
         url = data["source"]["url"]
-        # {{ are replaced by <{ when reading the yaml file 
+        # {{ are replaced by <{ when reading the yaml file
         # (sanitize) then reverted to {{ during the dump
         result = re.search('<{(.*)}}', data["source"]["url"])
         url = url.replace("<{%s}}" % result.group(1), tag)
         from urllib.request import urlretrieve
         import tempfile
-        with tempfile.NamedTemporaryFile(mode = "r") as tf:
+        with tempfile.NamedTemporaryFile(mode="r") as tf:
             urlretrieve('%s%s' % (url, extension), tf.name)
             lines = list(tf)
             for line in lines:
@@ -4186,19 +4184,18 @@ class BumpVersionConda(GitRepoCommand):
     def get_sha_from_github(self, repo_name, data, tag, extension=".zip"):
         # Download file from github
         url = data["source"]["url"]
-        # {{ are replaced by <{ when reading the yaml file 
+        # {{ are replaced by <{ when reading the yaml file
         # (sanitize) then reverted to {{ during the dump
-        #result = re.search('<{(.*)}}', url)
+        import hashlib
+        import shutil
+        import urllib
         url = url.replace("<{ name }}", repo_name)
         url = url.replace("<{ version }}", tag)
-        import hashlib, urllib, shutil, zipfile
         file_name = '%s%s' % (tag, extension)
 
         with urllib.request.urlopen(url) as response, \
              open(file_name, 'wb') as out_file:
             shutil.copyfileobj(response, out_file)
-            with zipfile.ZipFile(file_name) as zf:
-                zf.extractall()
         h = hashlib.sha256()
         with open(file_name, 'rb') as f:
             while True:
@@ -4209,20 +4206,33 @@ class BumpVersionConda(GitRepoCommand):
         os.remove(file_name)
         return h.hexdigest()
 
-
     def parse_tag(self, value):
         """ Parse the tag i.e. remove spaces etc."""
         return value.split("/")[-1].replace("v", "").replace("\n", "")
 
-    def update_data(self, directory, yaml, version, sha256, data):
+    def update_data(self, directory, jinja2, version, sha):
         """
         Update version and sha256 values in meta.yaml
         """
+        from ruamel.yaml import YAML
         import fileinput
+
         for (dirpath, dirnames, filenames) in os.walk(directory):
             for fn in filenames:
                 if fn == self.META_FILE:
                     fullpath = os.path.join(dirpath, fn)
+                    yaml = YAML(typ='jinja2')
+                    yaml.preserve_quotes = True
+                    # read the meta files and update the value
+                    with open(fullpath) as fp:
+                        data = yaml.load(fp)
+                    if data["source"][self.KEY_SHA] and \
+                       self.KEY_SHA not in jinja2.keys():
+                        data["source"][self.KEY_SHA] = sha
+                    if data["package"][self.KEY_VERSION] and \
+                       self.KEY_VERSION not in jinja2.keys():
+                        data["package"][self.KEY_VERSION] = version
+
                     with open(fullpath, "w") as fp:
                         yaml.dump(data, fp)
                     with fileinput.input(files=(fullpath), inplace=True) as f:
@@ -4233,7 +4243,7 @@ class BumpVersionConda(GitRepoCommand):
                                 if values[0] == self.KEY_VERSION:
                                     new_line = line.replace(values[1], version)
                                 elif values[0] == self.KEY_SHA:
-                                    new_line = line.replace(values[1], sha256)
+                                    new_line = line.replace(values[1], sha)
                                 print(new_line, end='')
                             else:
                                 print(line, end='')
