@@ -4245,9 +4245,9 @@ class BumpVersionConda(GitRepoCommand):
                                 values = self.replace(line)
                                 new_line = line
                                 if values[0] == self.KEY_VERSION:
-                                    new_line = line.replace(values[1], version)
+                                    new_line = line.replace(values[1], "\"%s\"" % version)
                                 elif values[0] == self.KEY_SHA:
-                                    new_line = line.replace(values[1], sha256)
+                                    new_line = line.replace(values[1], "\"%s\"" % sha256)
                                 print(new_line, end='')
                             else:
                                 print(line, end='')
