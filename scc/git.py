@@ -4079,18 +4079,18 @@ class BumpVersionConda(GitRepoCommand):
         if ((self.KEY_VERSION in jinja2.keys() and
            jinja2[self.KEY_VERSION] != latest_tag) or
            data["package"][self.KEY_VERSION] != latest_tag):
-            sha = ""
+            sha256 = ""
             # find which sha we need to get
             if "pypi" in data["source"]["url"]:
-                sha = self.get_sha_from_pypi(jinja2[self.KEY_NAME],
+                sha256 = self.get_sha256_from_pypi(jinja2[self.KEY_NAME],
                                              latest_tag)
             elif "downloads" in data["source"]["url"]:
-                sha = self.get_sha_from_downloads(data, latest_tag)
+                sha256 = self.get_sha256_from_downloads(data, latest_tag)
             elif "github" in data["source"]["url"]:
-                sha = self.get_sha_from_github(jinja2[self.KEY_NAME],
+                sha256 = self.get_sha256_from_github(jinja2[self.KEY_NAME],
                                                data, latest_tag)
             # Modify the meta.yaml file(s)
-            self.update_data(".", jinja2, latest_tag, sha)
+            self.update_data(".", jinja2, latest_tag, sha256)
             self.commit(".", "Update version to %s" % latest_tag)
         else:
             self.log.info("no new version")
@@ -4144,7 +4144,7 @@ class BumpVersionConda(GitRepoCommand):
                                  universal_newlines=True)
         return process.stdout.split("\t")[1]
 
-    def get_sha_from_pypi(self, repo_name, tag, extension=".tar.gz"):
+    def get_sha256_from_pypi(self, repo_name, tag, extension=".tar.gz"):
         """
         Read the sha from pypi.
         """
@@ -4156,35 +4156,43 @@ class BumpVersionConda(GitRepoCommand):
             if v["filename"].endswith(extension):
                 return v["digests"]["sha256"]
 
-    def get_sha_from_downloads(self, data, tag, extension=".sha1"):
+    def get_sha256_from_downloads(self, data, tag, extension=".zip"):
         """
-        Read the sha from downloads.openmicroscopy.org.
+        Retrieve zip from downloads.openmicroscopy.org and determine
+        sha256
         """
         url = data["source"]["url"]
         # {{ are replaced by <{ when reading the yaml file
         # (sanitize) then reverted to {{ during the dump
         result = re.search('<{(.*)}}', data["source"]["url"])
         url = url.replace("<{%s}}" % result.group(1), tag)
-        from urllib.request import urlretrieve
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode="r") as tf:
-            urlretrieve('%s%s' % (url, extension), tf.name)
-            lines = list(tf)
-            for line in lines:
-                return line.split(" ")[0]
+        file_name = '%s%s' % (tag, extension)
+        sha256 = self.determine_sha256(file_name, url)
+        os.remove(file_name)
+        return sha256
 
-    def get_sha_from_github(self, repo_name, data, tag, extension=".zip"):
+    def get_sha256_from_github(self, repo_name, data, tag, extension=".zip"):
+        """
+        Retrieve zip from github and determine sha256
+        """
         # Download file from github
         url = data["source"]["url"]
         # {{ are replaced by <{ when reading the yaml file
         # (sanitize) then reverted to {{ during the dump
-        import hashlib
-        import shutil
-        import urllib
         url = url.replace("<{ name }}", repo_name)
         url = url.replace("<{ version }}", tag)
         file_name = '%s%s' % (tag, extension)
+        sha256 = self.determine_sha256(file_name, url)
+        os.remove(file_name)
+        return sha256
 
+    def determine_sha256(self, file_name, url):
+        """ 
+        Determine the sha256 for the specified file
+        """
+        import hashlib
+        import shutil
+        import urllib
         with urllib.request.urlopen(url) as response, \
              open(file_name, 'wb') as out_file:
             shutil.copyfileobj(response, out_file)
@@ -4195,14 +4203,13 @@ class BumpVersionConda(GitRepoCommand):
                 if not chunk:
                     break
                 h.update(chunk)
-        os.remove(file_name)
         return h.hexdigest()
 
     def parse_tag(self, value):
         """ Parse the tag i.e. remove spaces etc."""
         return value.split("/")[-1].replace("v", "").replace("\n", "")
 
-    def update_data(self, directory, jinja2, version, sha):
+    def update_data(self, directory, jinja2, version, sha256):
         """
         Update version and sha256 values in meta.yaml
         """
@@ -4221,7 +4228,7 @@ class BumpVersionConda(GitRepoCommand):
                         data = yaml.load(fp)
                     if data["source"][self.KEY_SHA] and \
                        self.KEY_SHA not in jinja2.keys():
-                        data["source"][self.KEY_SHA] = sha
+                        data["source"][self.KEY_SHA] = sha256
                     if data["package"][self.KEY_VERSION] and \
                        self.KEY_VERSION not in jinja2.keys():
                         data["package"][self.KEY_VERSION] = version
@@ -4236,7 +4243,7 @@ class BumpVersionConda(GitRepoCommand):
                                 if values[0] == self.KEY_VERSION:
                                     new_line = line.replace(values[1], version)
                                 elif values[0] == self.KEY_SHA:
-                                    new_line = line.replace(values[1], sha)
+                                    new_line = line.replace(values[1], sha256)
                                 print(new_line, end='')
                             else:
                                 print(line, end='')
