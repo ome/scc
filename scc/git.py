@@ -4087,7 +4087,10 @@ class BumpVersionConda(GitRepoCommand):
             elif "downloads" in data["source"]["url"]:
                 sha256 = self.get_sha256_from_downloads(data, latest_tag)
             elif "github" in data["source"]["url"]:
-                sha256 = self.get_sha256_from_github(jinja2[self.KEY_NAME],
+                name = None
+                if self.KEY_NAME in jinja2.keys():
+                    name = jinja2[self.KEY_NAME]
+                sha256 = self.get_sha256_from_github(name,
                                                data, latest_tag)
             # Modify the meta.yaml file(s)
             self.update_data(".", jinja2, latest_tag, sha256)
@@ -4179,7 +4182,8 @@ class BumpVersionConda(GitRepoCommand):
         url = data["source"]["url"]
         # {{ are replaced by <{ when reading the yaml file
         # (sanitize) then reverted to {{ during the dump
-        url = url.replace("<{ name }}", repo_name)
+        if repo_name is not None:
+            url = url.replace("<{ name }}", repo_name)
         url = url.replace("<{ version }}", tag)
         file_name = '%s%s' % (tag, extension)
         sha256 = self.determine_sha256(file_name, url)
