@@ -4053,23 +4053,17 @@ class BumpVersionConda(GitRepoCommand):
     def __init__(self, sub_parsers):
         super(BumpVersionConda, self).__init__(sub_parsers)
 
-        self.parser.add_argument(
-            '--repo', '-r', type=str,
-            help='Target repository e.g. ome/omero-py')
-
     def __call__(self, args):
         super(BumpVersionConda, self).__call__(args)
         data, jinja2 = self.extact_metadata(".")
         if data is None or jinja2 is None:
             raise Stop(1, "No %s files found" % self.META_FILE)
 
-        if args.repo:
-            url = self.GITHUB_URL + args.repo
-        else:
-            if self.KEY_NAME in jinja2.keys():
-                url = self.GITHUB_URL + "ome/%s" % jinja2[self.KEY_NAME]
-            else:
-                raise Stop(1, "No valid url found in %s" % self.META_FILE)
+        try:
+            url = data['about']['dev_url']
+        except:
+            raise Stop(1, "No valid url found in %s" % self.META_FILE)
+
         # Find the GitHub tag
         output = self.get_latest_tag_from_github(url)
         if output is None:
