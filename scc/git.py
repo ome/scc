@@ -4060,7 +4060,7 @@ class BumpVersionConda(GitRepoCommand):
             raise Stop(1, "No %s files found" % self.META_FILE)
 
         try:
-            url = data['about']['dev_url']
+            dev_url = data['about']['dev_url']
         except:
             raise Stop(1, "No valid url found in %s" % self.META_FILE)
 
