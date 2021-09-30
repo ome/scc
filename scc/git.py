@@ -4062,7 +4062,7 @@ class BumpVersionConda(GitRepoCommand):
         try:
             dev_url = data['about']['dev_url']
         except:
-            raise Stop(1, "No valid url found in %s" % self.META_FILE)
+            raise Stop(1, "No valid dev_url found in %s" % self.META_FILE)
 
         # Find the GitHub tag
         output = self.get_latest_tag_from_github(dev_url)
