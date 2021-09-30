@@ -4067,7 +4067,7 @@ class BumpVersionConda(GitRepoCommand):
         # Find the GitHub tag
         output = self.get_latest_tag_from_github(url)
         if output is None:
-            raise Stop(1, "URL %s not valid" % url)
+            raise Stop(1, "URL %s not valid" % dev_url)
 
         latest_tag = self.parse_tag(output)
         if ((self.KEY_VERSION in jinja2.keys() and
