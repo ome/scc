@@ -4065,7 +4065,7 @@ class BumpVersionConda(GitRepoCommand):
             raise Stop(1, "No valid url found in %s" % self.META_FILE)
 
         # Find the GitHub tag
-        output = self.get_latest_tag_from_github(url)
+        output = self.get_latest_tag_from_github(dev_url)
         if output is None:
             raise Stop(1, "URL %s not valid" % dev_url)
 
