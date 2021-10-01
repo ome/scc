@@ -4048,6 +4048,7 @@ class BumpVersionConda(GitRepoCommand):
     KEY_NAME = "name"
     KEY_VERSION = "version"
     KEY_SHA = "sha256"
+    KEY_NUMBER = "number"
 
     def __init__(self, sub_parsers):
         super(BumpVersionConda, self).__init__(sub_parsers)
@@ -4069,9 +4070,15 @@ class BumpVersionConda(GitRepoCommand):
             raise Stop(1, "URL %s not valid" % dev_url)
 
         latest_tag = self.parse_tag(output)
+        previous_tag = ""
+        if self.KEY_VERSION in jinja2.keys():
+            previous_tag = jinja2[self.KEY_VERSION]
+        else:
+            previous_tag = data["package"][self.KEY_VERSION]
         if ((self.KEY_VERSION in jinja2.keys() and
            jinja2[self.KEY_VERSION] != latest_tag) or
-           data["package"][self.KEY_VERSION] != latest_tag):
+           (self.KEY_VERSION not in jinja2.keys() and
+           data["package"][self.KEY_VERSION] != latest_tag)):
             sha256 = ""
             # find which sha we need to get
             if "pypi" in data["source"]["url"]:
@@ -4086,8 +4093,8 @@ class BumpVersionConda(GitRepoCommand):
                 sha256 = self.get_sha256_from_github(name,
                                                data, latest_tag)
             # Modify the meta.yaml file(s)
-            self.update_data(".", jinja2, latest_tag, sha256)
-            self.commit(".", "Update version to %s" % latest_tag)
+            msg = self.update_data(".", jinja2, latest_tag, sha256, previous_tag)
+            self.commit(".", msg)
         else:
             self.log.info("no new version")
 
@@ -4206,13 +4213,16 @@ class BumpVersionConda(GitRepoCommand):
         """ Parse the tag i.e. remove spaces etc."""
         return value.split("/")[-1].replace("v", "").replace("\n", "")
 
-    def update_data(self, directory, jinja2, version, sha256):
+    def update_data(self, directory, jinja2, version, sha256, previous_version):
         """
         Update version and sha256 values in meta.yaml
         """
         from ruamel.yaml import YAML
         import fileinput
+        import deepdiff
+        import json
 
+        msg = ""
         for (dirpath, dirnames, filenames) in os.walk(directory):
             for fn in filenames:
                 if fn == self.META_FILE:
@@ -4230,8 +4240,13 @@ class BumpVersionConda(GitRepoCommand):
                        self.KEY_VERSION not in jinja2.keys():
                         data["package"][self.KEY_VERSION] = version
 
+                    if previous_version != version:
+                        data["build"][self.KEY_NUMBER] = 0
+                        msg = "Update version to %s" % version
+
                     with open(fullpath, "w") as fp:
                         yaml.dump(data, fp)
+
                     with fileinput.input(files=(fullpath), inplace=True) as f:
                         for line in f:
                             if line.startswith(self.PREFIX):
@@ -4244,3 +4259,6 @@ class BumpVersionConda(GitRepoCommand):
                                 print(new_line, end='')
                             else:
                                 print(line, end='')
+
+        return msg
+
