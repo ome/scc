@@ -4045,7 +4045,6 @@ class BumpVersionConda(GitRepoCommand):
     META_FILE = "meta.yaml"
     PREFIX = "{% set "
     SUFFIX = " %}"
-    GITHUB_URL = "https://github.com/"
     KEY_NAME = "name"
     KEY_VERSION = "version"
     KEY_SHA = "sha256"
