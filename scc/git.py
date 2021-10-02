@@ -4061,7 +4061,7 @@ class BumpVersionConda(GitRepoCommand):
 
         try:
             dev_url = data['about']['dev_url']
-        except:
+        except Exception:
             raise Stop(1, "No valid dev_url found in %s" % self.META_FILE)
 
         # Find the GitHub tag
@@ -4083,17 +4083,17 @@ class BumpVersionConda(GitRepoCommand):
             # find which sha we need to get
             if "pypi" in data["source"]["url"]:
                 sha256 = self.get_sha256_from_pypi(jinja2[self.KEY_NAME],
-                                             latest_tag)
+                                                   latest_tag)
             elif "downloads" in data["source"]["url"]:
                 sha256 = self.get_sha256_from_downloads(data, latest_tag)
             elif "github" in data["source"]["url"]:
                 name = None
                 if self.KEY_NAME in jinja2.keys():
                     name = jinja2[self.KEY_NAME]
-                sha256 = self.get_sha256_from_github(name,
-                                               data, latest_tag)
+                sha256 = self.get_sha256_from_github(name, data, latest_tag)
             # Modify the meta.yaml file(s)
-            msg = self.update_data(".", jinja2, latest_tag, sha256, previous_tag)
+            msg = self.update_data(".", jinja2, latest_tag, sha256,
+                                   previous_tag)
             self.commit(".", msg)
         else:
             self.log.info("no new version")
@@ -4191,7 +4191,7 @@ class BumpVersionConda(GitRepoCommand):
         return sha256
 
     def determine_sha256(self, file_name, url):
-        """ 
+        """
         Determine the sha256 for the specified file
         """
         import hashlib
@@ -4213,14 +4213,13 @@ class BumpVersionConda(GitRepoCommand):
         """ Parse the tag i.e. remove spaces etc."""
         return value.split("/")[-1].replace("v", "").replace("\n", "")
 
-    def update_data(self, directory, jinja2, version, sha256, previous_version):
+    def update_data(self, directory, jinja2, version, sha256,
+                    previous_version):
         """
         Update version and sha256 values in meta.yaml
         """
         from ruamel.yaml import YAML
         import fileinput
-        import deepdiff
-        import json
 
         msg = ""
         for (dirpath, dirnames, filenames) in os.walk(directory):
@@ -4253,12 +4252,12 @@ class BumpVersionConda(GitRepoCommand):
                                 values = self.replace(line)
                                 new_line = line
                                 if values[0] == self.KEY_VERSION:
-                                    new_line = line.replace(values[1], "\"%s\"" % version)
+                                    new_line = line.replace(values[1],
+                                                            "\"%s\"" % version)
                                 elif values[0] == self.KEY_SHA:
-                                    new_line = line.replace(values[1], "\"%s\"" % sha256)
+                                    new_line = line.replace(values[1],
+                                                            "\"%s\"" % sha256)
                                 print(new_line, end='')
                             else:
                                 print(line, end='')
-
         return msg
-
