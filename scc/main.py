@@ -32,6 +32,7 @@ import sys
 
 from yaclifw.framework import main, Stop
 from .git import AlreadyMerged
+from .git import BumpVersionConda
 from .git import CheckLabels
 from .git import CheckMilestone
 from .git import CheckPRs
@@ -82,6 +83,7 @@ def entry_point():
             (TravisMerge.NAME, TravisMerge),
             (Version.NAME, Version),
             (UpdateSubmodules.NAME, UpdateSubmodules),
+            (BumpVersionConda.NAME, BumpVersionConda),
             ])
     except Stop as stop:
         print(stop, end=' ')

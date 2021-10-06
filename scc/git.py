@@ -4033,3 +4033,231 @@ class TagRelease(_TagCommands):
             user = self.gh.get_login()
             remote = "git@github.com:%s/" % (user) + "%s.git"
             self.main_repo.rpush('--tags', remote, force=True)
+
+
+class BumpVersionConda(GitRepoCommand):
+    """
+    Bump the versions and the sha256 of the package the conda repository is for
+    e.g. conda-omero-py -> omero-py
+    """
+
+    NAME = "bump-version-conda"
+    META_FILE = "meta.yaml"
+    PREFIX = "{% set "
+    SUFFIX = " %}"
+    KEY_NAME = "name"
+    KEY_VERSION = "version"
+    KEY_SHA = "sha256"
+    KEY_NUMBER = "number"
+
+    def __init__(self, sub_parsers):
+        super(BumpVersionConda, self).__init__(sub_parsers)
+
+    def __call__(self, args):
+        super(BumpVersionConda, self).__call__(args)
+        data, jinja2 = self.extact_metadata(".")
+        if data is None or jinja2 is None:
+            raise Stop(1, "No %s files found" % self.META_FILE)
+
+        try:
+            dev_url = data['about']['dev_url']
+        except Exception:
+            raise Stop(1, "No valid dev_url found in %s" % self.META_FILE)
+
+        # Find the GitHub tag
+        output = self.get_latest_tag_from_github(dev_url)
+        if output is None:
+            raise Stop(1, "URL %s not valid" % dev_url)
+
+        latest_tag = self.parse_tag(output)
+        previous_tag = ""
+        if self.KEY_VERSION in jinja2.keys():
+            previous_tag = jinja2[self.KEY_VERSION]
+        else:
+            previous_tag = data["package"][self.KEY_VERSION]
+        if ((self.KEY_VERSION in jinja2.keys() and
+           jinja2[self.KEY_VERSION] != latest_tag) or
+           (self.KEY_VERSION not in jinja2.keys() and
+           data["package"][self.KEY_VERSION] != latest_tag)):
+            sha256 = ""
+            # find which sha we need to get
+            if "pypi" in data["source"]["url"]:
+                sha256 = self.get_sha256_from_pypi(jinja2[self.KEY_NAME],
+                                                   latest_tag)
+            elif "downloads" in data["source"]["url"]:
+                sha256 = self.get_sha256_from_downloads(data, latest_tag)
+            elif "github" in data["source"]["url"]:
+                name = None
+                if self.KEY_NAME in jinja2.keys():
+                    name = jinja2[self.KEY_NAME]
+                sha256 = self.get_sha256_from_github(name, data, latest_tag)
+            # Modify the meta.yaml file(s)
+            msg = self.update_data(".", jinja2, latest_tag, sha256,
+                                   previous_tag)
+            self.commit(".", msg)
+        else:
+            self.log.info("no new version")
+
+    def commit(self, directory, msg):
+        from scc.git import get_github, get_token_or_user
+        token = get_token_or_user(local=True)
+        gh = get_github(token, dont_ask=True)
+        gr = gh.git_repo(directory)
+        if gr.has_local_changes():
+            gr.call("git", "commit", "-a", "-n", "-m", msg)
+
+    def extact_metadata(self, directory):
+        """
+        Scan the directory and parse the content of the first
+        meta.yaml file found.
+        """
+        from ruamel.yaml import YAML
+        yaml = YAML(typ='jinja2')
+        yaml.preserve_quotes = True
+        for (dirpath, dirnames, filenames) in os.walk(directory):
+            for fn in filenames:
+                if fn == self.META_FILE:
+                    fullpath = os.path.join(dirpath, fn)
+                    with open(fullpath) as fp:
+                        data = yaml.load(fp)
+                    # find information about the repository
+                    jinja2 = {}
+                    with open(fullpath) as file:
+                        for line in file:
+                            if line.startswith(self.PREFIX):
+                                values = self.replace(line)
+                                jinja2[values[0]] = values[1].replace("\"", "")
+                    return (data, jinja2)
+        return (None, None)
+
+    def replace(self, line):
+        """
+        Clean up the line
+        """
+        v = line.replace(self.PREFIX, "").replace(self.SUFFIX, "")
+        return v.replace(" ", "").replace("\n", "").split("=")
+
+    def get_latest_tag_from_github(self, repo_url):
+        """
+        Return the latest tag for the given repository.
+        """
+        command = "git ls-remote --refs --tags --sort=\"version:refname\" %s | grep -v 'v*.rc[0-9]\+$' | grep -v 'v*.dev[0-9]\+$' | grep 'v*\.' |grep -v 'v*.-m[0-9]\+$' | tail -n1" % repo_url  # noqa
+        process = subprocess.run(command, shell=True, check=True,
+                                 stdout=subprocess.PIPE,
+                                 universal_newlines=True)
+        return process.stdout.split("\t")[1]
+
+    def get_sha256_from_pypi(self, repo_name, tag, extension=".tar.gz"):
+        """
+        Read the sha from pypi.
+        """
+        import requests
+        r = requests.get('https://pypi.org/pypi/%s/json' % repo_name)
+        json = r.json()
+        # parse the json to extract the sha256
+        for v in json["releases"][tag]:
+            if v["filename"].endswith(extension):
+                return v["digests"]["sha256"]
+
+    def get_sha256_from_downloads(self, data, tag, extension=".zip"):
+        """
+        Retrieve zip from downloads.openmicroscopy.org and determine
+        sha256
+        """
+        url = data["source"]["url"]
+        # {{ are replaced by <{ when reading the yaml file
+        # (sanitize) then reverted to {{ during the dump
+        result = re.search('<{(.*)}}', data["source"]["url"])
+        url = url.replace("<{%s}}" % result.group(1), tag)
+        file_name = '%s%s' % (tag, extension)
+        sha256 = self.determine_sha256(file_name, url)
+        os.remove(file_name)
+        return sha256
+
+    def get_sha256_from_github(self, repo_name, data, tag, extension=".zip"):
+        """
+        Retrieve zip from github and determine sha256
+        """
+        # Download file from github
+        url = data["source"]["url"]
+        # {{ are replaced by <{ when reading the yaml file
+        # (sanitize) then reverted to {{ during the dump
+        if repo_name is not None:
+            url = url.replace("<{ name }}", repo_name)
+        url = url.replace("<{ version }}", tag)
+        file_name = '%s%s' % (tag, extension)
+        sha256 = self.determine_sha256(file_name, url)
+        os.remove(file_name)
+        return sha256
+
+    def determine_sha256(self, file_name, url):
+        """
+        Determine the sha256 for the specified file
+        """
+        import hashlib
+        import shutil
+        import urllib
+        with urllib.request.urlopen(url) as response, \
+             open(file_name, 'wb') as out_file:
+            shutil.copyfileobj(response, out_file)
+        h = hashlib.sha256()
+        with open(file_name, 'rb') as f:
+            while True:
+                chunk = f.read(h.block_size)
+                if not chunk:
+                    break
+                h.update(chunk)
+        return h.hexdigest()
+
+    def parse_tag(self, value):
+        """ Parse the tag i.e. remove spaces etc."""
+        return value.split("/")[-1].replace("v", "").replace("\n", "")
+
+    def update_data(self, directory, jinja2, version, sha256,
+                    previous_version):
+        """
+        Update version and sha256 values in meta.yaml
+        """
+        from ruamel.yaml import YAML
+        import fileinput
+
+        msg = ""
+        for (dirpath, dirnames, filenames) in os.walk(directory):
+            for fn in filenames:
+                if fn == self.META_FILE:
+                    fullpath = os.path.join(dirpath, fn)
+                    yaml = YAML(typ='jinja2')
+                    yaml.preserve_quotes = True
+                    yaml.indent(mapping=2)
+                    # read the meta files and update the value
+                    with open(fullpath) as fp:
+                        data = yaml.load(fp)
+                    if data["source"][self.KEY_SHA] and \
+                       self.KEY_SHA not in jinja2.keys():
+                        data["source"][self.KEY_SHA] = sha256
+                    if data["package"][self.KEY_VERSION] and \
+                       self.KEY_VERSION not in jinja2.keys():
+                        data["package"][self.KEY_VERSION] = version
+
+                    if previous_version != version:
+                        data["build"][self.KEY_NUMBER] = 0
+                        msg = "Update version to %s" % version
+
+                    with open(fullpath, "w") as fp:
+                        yaml.dump(data, fp)
+
+                    with fileinput.input(files=(fullpath), inplace=True) as f:
+                        for line in f:
+                            if line.startswith(self.PREFIX):
+                                values = self.replace(line)
+                                new_line = line
+                                if values[0] == self.KEY_VERSION:
+                                    new_line = line.replace(values[1],
+                                                            "\"%s\"" % version)
+                                elif values[0] == self.KEY_SHA:
+                                    new_line = line.replace(values[1],
+                                                            "\"%s\"" % sha256)
+                                print(new_line, end='')
+                            else:
+                                print(line, end='')
+        return msg
