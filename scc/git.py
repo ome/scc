@@ -1061,7 +1061,7 @@ class GitRepository(object):
             self.dbg("Reading repository configuration from %s" %
                      (repository_config))
             with open(self.repository_config) as fh:
-                self.repository_config = yaml.load(fh)
+                self.repository_config = yaml.load(fh, Loader=yaml.FullLoader)
         if self.repository_config is not None:
             self.dbg("Repository configuration:\n%s" %
                      (yaml.dump(self.repository_config)))
@@ -4119,7 +4119,7 @@ class BumpVersionConda(GitRepoCommand):
                 if fn == self.META_FILE:
                     fullpath = os.path.join(dirpath, fn)
                     with open(fullpath) as fp:
-                        data = yaml.load(fp)
+                        data = yaml.load(fp, Loader=yaml.FullLoader)
                     # find information about the repository
                     jinja2 = {}
                     with open(fullpath) as file:
@@ -4231,7 +4231,7 @@ class BumpVersionConda(GitRepoCommand):
                     yaml.indent(mapping=2)
                     # read the meta files and update the value
                     with open(fullpath) as fp:
-                        data = yaml.load(fp)
+                        data = yaml.load(fp, Loader=yaml.FullLoader)
                     if data["source"][self.KEY_SHA] and \
                        self.KEY_SHA not in jinja2.keys():
                         data["source"][self.KEY_SHA] = sha256
