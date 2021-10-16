@@ -4119,7 +4119,7 @@ class BumpVersionConda(GitRepoCommand):
                 if fn == self.META_FILE:
                     fullpath = os.path.join(dirpath, fn)
                     with open(fullpath) as fp:
-                        data = yaml.load(fp, Loader=yaml.FullLoader)
+                        data = yaml.load(fp)
                     # find information about the repository
                     jinja2 = {}
                     with open(fullpath) as file:
@@ -4231,7 +4231,7 @@ class BumpVersionConda(GitRepoCommand):
                     yaml.indent(mapping=2)
                     # read the meta files and update the value
                     with open(fullpath) as fp:
-                        data = yaml.load(fp, Loader=yaml.FullLoader)
+                        data = yaml.load(fp)
                     if data["source"][self.KEY_SHA] and \
                        self.KEY_SHA not in jinja2.keys():
                         data["source"][self.KEY_SHA] = sha256
