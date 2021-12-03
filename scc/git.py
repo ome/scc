@@ -3010,8 +3010,8 @@ class GitHubIssues(GitHubCommand):
             '--by-date', action="store_true", default=False,
             help="group issues by YYYY-MM")
         self.parser.add_argument(
-            'orgs', nargs="+",
-            help="organizations that should be checked")
+            'items', nargs="+",
+            help="items to be checked, e.g. myorg or myorg/somerepo")
 
         # To org or not to org
         membership = self.parser.add_mutually_exclusive_group(required=False)
@@ -3034,15 +3034,24 @@ class GitHubIssues(GitHubCommand):
     def __call__(self, args):
         super(GitHubIssues, self).__call__(args)
         self.login(args)
-        for org in args.orgs:
-            query = " ".join(args.extra)
+        for item in args.items:
+
+            if "/" not in item:
+                org = item
+                repo = None
+                query = f"user:{org}"
+            else:
+                org, repo = item.split("/", 1)
+                query = f"repo:{item}"
+
+            org = self.gh.get_organization(org)
+            query += " ".join(args.extra)
             query += " is:open"
             query += " is:issue"
-            query += " user:%s" % org
             query += " archived:false"
             if args.no_labels:
                 query += " no:label"
-            org = self.gh.get_organization(org)
+
             if args.external is None:
                 # load all
                 pass
@@ -3053,6 +3062,7 @@ class GitHubIssues(GitHubCommand):
                 for m in org.get_members():
                     query += " author:%s" % m.login
 
+            self.log.debug(f"item:{item} query: '{query}'")
             if not args.by_date:
                 issues = []
                 for issue in self.gh.search_issues(query):
@@ -3062,8 +3072,9 @@ class GitHubIssues(GitHubCommand):
                         issue.html_url,
                         issue.user.login,
                     ))
-                print("##", org.login, "(%s)" % len(issues), "##")
-                print("\n".join(sorted(issues)))
+                if issues:
+                    print("##", item, "(%s)" % len(issues), "##")
+                    print("\n".join(sorted(issues)))
 
             else:
                 count = 0
@@ -3080,12 +3091,12 @@ class GitHubIssues(GitHubCommand):
                             issue.user.login,
                         ))
 
-                print("##", org.login, "(%s)" % count, "##")
-
-                for month in sorted(grouped_issues, reverse=args.descending):
-                    issues = sorted(grouped_issues[month], reverse=args.descending)
-                    print("## %s" % month)
-                    print("\n".join(sorted(issues, reverse=args.descending)))
+                if grouped_issues:
+                    print("##", item, "(%s)" % count, "##")
+                    for month in sorted(grouped_issues, reverse=args.descending):
+                        issues = sorted(grouped_issues[month], reverse=args.descending)
+                        print("## %s" % month)
+                        print("\n".join(sorted(issues, reverse=args.descending)))
 
 
 class GitHubRepos(GitHubCommand):
