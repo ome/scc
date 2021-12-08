@@ -15,7 +15,7 @@ The scc command provides tools for simplifying the Git(Hub) workflow.
 Documentation
 -------------
 
-Setup and usage instructions can be found at `readthedocs`_.
+Setup and usage instructions can be found on the `OME-contributing`_ pages.
 
 Dependencies
 ------------
@@ -117,5 +117,5 @@ Copyright
 .. _snoopys-sandbox: https://github.com/ome/snoopys-sandbox
 .. _snoopys-sandbox-2: https://github.com/ome/snoopys-sandbox-2
 .. _Travis: https://travis-ci.org/ome/scc
-.. _readthedocs: https://ome-contributing.readthedocs.io/en/latest/scc.html
+.. _OME-contributing: https://ome-contributing.readthedocs.io/en/latest/scc.html
 
