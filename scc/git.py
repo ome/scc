@@ -1971,7 +1971,7 @@ class GitRepository(object):
             if repo.private:
                 url = repo.ssh_url
             else:
-                url = repo.git_url
+                url = repo.clone_url
             remotes[key] = url
         return remotes
 
