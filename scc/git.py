@@ -975,10 +975,25 @@ class GitHubRepository(object):
         if filter_excluded:
             return False, reason
 
+        # Exclude PRs by stage
+        stage_included, reason = self.exclude_by_stage(
+            pullrequest, filters["exclude"].get("stage", None))
+        if not stage_included:
+            return False, reason
+
         # Filter PRs by status if the status filter is on
         status_included, reason = self.run_status_filter(pullrequest, filters)
         if not status_included:
             return False, reason
+
+        return True, None
+
+    def exclude_by_stage(self, pullrequest, stage_filter):
+        if stage_filter is None:
+            return True, None
+
+        if "draft" in stage_filter and pullrequest.draft:
+            return False, "stage: draft"
 
         return True, None
 
@@ -1000,13 +1015,13 @@ class GitHubRepository(object):
         if check_suites.totalCount > 0:
             for suite in check_suites:
                 if not check_status(suite.conclusion, filters["status"]):
-                    return False, "state: %s" % suite.conclusion
+                    return False, "status: %s" % suite.conclusion
 
         statuses = pullrequest.get_last_commit().get_statuses()
         if statuses.totalCount > 0:
             status = pullrequest.get_last_commit().get_combined_status()
             if not check_status(status.state, filters["status"]):
-                return False, "state: %s" % status.state
+                return False, "status: %s" % status.state
 
         return True, None
 
@@ -2195,7 +2210,9 @@ def get_default_filters(default):
     if default == "org":
         filters["include"] = {
             "user": ["#org"], "label": ["include", "dependencies"]}
-        filters["exclude"] = {"label": ["exclude", "breaking"]}
+        filters["exclude"] = {
+            "label": ["exclude", "breaking"],
+            "stage": ["draft"]}
     elif default == "none":
         filters["include"] = {}
         filters["exclude"] = {}
@@ -2228,20 +2245,23 @@ user.  Filter values with a hash symbol allow to filter Pull Requests by \
 number, e.g. #NUMBER or ORG/REPO#NUMBER for the ORG/REPO submodule. If \
 neither  a key/value nor a hash symbol is found, the filter is considered a \
 label filter."""
+        stage_desc="""
+The stage:draft key/value pair can be used for excluding PRs in a draft stage.
+        """
         self.parser.add_argument(
             '--default', '-D', type=str,
             choices=["none", "org", "all"], default="org",
             help="""Specify the default set of filters to use. NONE means no \
 filter is preset. \
 ORG sets user:#org, label:include, label:dependencies as the default include \
-filters and label:exclude and label:breaking as the default exclude filters. \
+filters and label:exclude, label:breaking and stage:draft as the default exclude filters. \
 ALL sets user:#all as the default include filter. Default: ORG.""")
         self.parser.add_argument(
             '--include', '-I', type=str, action='append',
             help='Filters to include Pull Requests. ' + filter_desc)
         self.parser.add_argument(
             '--exclude', '-E', type=str, action='append',
-            help='Filters to exclude Pull Requests. ' + filter_desc)
+            help='Filters to exclude Pull Requests. ' + filter_desc + stage_desc)
         self.parser.add_argument(
             '--check-commit-status', '-S', type=str,
             choices=["none", "no-error", "success-only"], default="none",
@@ -2262,7 +2282,8 @@ ALL sets user:#all as the default include filter. Default: ORG.""")
         key_value_map = {
             "label": ("%s Pull Request(s) labelled as", lambda x: x),
             "pr": ("%s Pull Request(s)", lambda x: x),
-            "user": ("%s Pull Request(s) opened by", self.get_user_desc)}
+            "user": ("%s Pull Request(s) opened by", self.get_user_desc),
+            "stage": ("%s Pull Request(s) staged as", lambda x: x)}
 
         for ftype in sorted(list(ftype_desc.keys()), reverse=True):
             for key in sorted(list(self.filters[ftype].keys()), reverse=True):
