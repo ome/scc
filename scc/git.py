@@ -3706,8 +3706,13 @@ class Token(GitHubCommand):
         super(Token, self).__init__(sub_parsers, set_defaults=False)
         # No token args
 
+        self.parser.set_defaults(func=self._catch_help)
+
         token_parsers = self.parser.add_subparsers(title="Subcommands")
         self._configure(token_parsers)
+
+    def _catch_help(self, ignored):
+        print("use -h to find a list of subcommands")
 
     def _configure(self, sub_parsers):
         help = "Print all known GitHub tokens and users"
