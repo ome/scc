@@ -4084,6 +4084,7 @@ class BumpVersionConda(GitRepoCommand):
     SUFFIX = " %}"
     KEY_NAME = "name"
     KEY_VERSION = "version"
+    KEY_GIT_VERSION = "git_version"
     KEY_SHA = "sha256"
     KEY_NUMBER = "number"
 
@@ -4276,6 +4277,9 @@ class BumpVersionConda(GitRepoCommand):
                     if data["package"][self.KEY_VERSION] and \
                        self.KEY_VERSION not in jinja2.keys():
                         data["package"][self.KEY_VERSION] = version
+                    if data["package"][self.KEY_GIT_VERSION] and \
+                       self.KEY_GIT_VERSION not in jinja2.keys():
+                        data["package"][self.KEY_GIT_VERSION] = version
 
                     if previous_version != version:
                         data["build"][self.KEY_NUMBER] = 0
@@ -4295,6 +4299,9 @@ class BumpVersionConda(GitRepoCommand):
                                 elif values[0] == self.KEY_SHA:
                                     new_line = line.replace(values[1],
                                                             "\"%s\"" % sha256)
+                                elif values[0] == self.KEY_GIT_VERSION:
+                                    new_line = line.replace(values[1],
+                                                            "\"%s\"" % version)
                                 print(new_line, end='')
                             else:
                                 print(line, end='')
