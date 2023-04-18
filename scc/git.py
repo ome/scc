@@ -4271,6 +4271,9 @@ class BumpVersionConda(GitRepoCommand):
                     # read the meta files and update the value
                     with open(fullpath) as fp:
                         data = yaml.load(fp)
+                    if self.KEY_GIT_VERSION not in data["package"]:
+                        data["package"][self.KEY_GIT_VERSION] = version
+
                     if data["source"][self.KEY_SHA] and \
                        self.KEY_SHA not in jinja2.keys():
                         data["source"][self.KEY_SHA] = sha256
