@@ -4222,6 +4222,7 @@ class BumpVersionConda(GitRepoCommand):
         if repo_name is not None:
             url = url.replace("<{ name }}", repo_name)
         url = url.replace("<{ version }}", tag)
+        url = url.replace("<{ github_version }}", tag)
         file_name = '%s%s' % (tag, extension)
         sha256 = self.determine_sha256(file_name, url)
         os.remove(file_name)
