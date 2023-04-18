@@ -4084,7 +4084,7 @@ class BumpVersionConda(GitRepoCommand):
     SUFFIX = " %}"
     KEY_NAME = "name"
     KEY_VERSION = "version"
-    KEY_GIT_VERSION = "git_version"
+    KEY_GIT_VERSION = "github_version"
     KEY_SHA = "sha256"
     KEY_NUMBER = "number"
 
