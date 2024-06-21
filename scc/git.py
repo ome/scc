@@ -44,6 +44,7 @@ import socket
 import yaml
 import six
 import warnings
+import functools
 from ssl import SSLError
 from yaclifw.framework import Command, Stop
 
@@ -3417,7 +3418,7 @@ class MilestoneCommand(GitRepoCommand):
             self.log.info(str(repo.origin))
             milestones = repo.origin.get_milestones()
             parsed = [(m.due_on, m) for m in milestones]
-            parsed.sort(self.cmp_date)
+            parsed.sort(key=functools.cmp_to_key(self.cmp_date))
             print(header)
             for due_on, m in parsed:
                 due = due_on is not None and due_on or ""
