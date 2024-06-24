@@ -965,7 +965,9 @@ class GitHubRepository(object):
         pr_attributes["pr"] = ['#' + str(pullrequest.get_number())]
 
         milestone = pullrequest.get_milestone()
-        pr_attributes["milestone"] = [milestone.title, str(milestone.number)]
+        pr_attributes["milestone"] = [
+            milestone.title, str(milestone.number)
+        ] if milestone else []
 
         if not self.is_whitelisted(pullrequest_user,
                                    filters["include"].get("user")):
