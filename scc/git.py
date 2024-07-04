@@ -721,6 +721,11 @@ class PullRequest(object):
                 if whitelist(comment)]
 
     @retry_on_error(retries=SCC_RETRIES)
+    def get_milestone(self):
+        """Return the milestones of the Pull Request"""
+        return self.get_issue().milestone
+
+    @retry_on_error(retries=SCC_RETRIES)
     def create_issue_comment(self, msg):
         """Add comment to Pull Request"""
 
@@ -960,6 +965,11 @@ class GitHubRepository(object):
         pr_attributes["user"] = [pullrequest_user.login]
         pr_attributes["pr"] = ['#' + str(pullrequest.get_number())]
 
+        milestone = pullrequest.get_milestone()
+        pr_attributes["milestone"] = [
+            milestone.title, str(milestone.number)
+        ] if milestone else []
+
         if not self.is_whitelisted(pullrequest_user,
                                    filters["include"].get("user")):
             # Allow filter PR inclusion using include filter
@@ -986,6 +996,14 @@ class GitHubRepository(object):
         status_included, reason = self.run_status_filter(pullrequest, filters)
         if not status_included:
             return False, reason
+
+        # Filter PRs by milestones if specified
+        if filters["include"].get("milestone", None):
+            filter_included, reason = self.run_filter(
+                {"milestone": filters["include"]["milestone"]},
+                pr_attributes, action="Include")
+            if not filter_included:
+                return False, 'milestone'
 
         return True, None
 
@@ -2240,7 +2258,8 @@ class FilteredPullRequestsCommand(GitRepoCommand):
     def _configure_filters(self):
         filter_desc = """Filters can be specified as key value pairs, e.g. \
 KEY:VALUE or using a hash symbol, e.g. prefix#NUMBER. Recognized key/values \
-are label:LABEL, pr:NUMBER, user:USERNAME. For user keys, user:#org means \
+are label:LABEL, pr:NUMBER, user:USERNAME, milestone:MILESTONE. \
+For user keys, user:#org means \
 any public member of the repository organization and user:#all means any \
 user.  Filter values with a hash symbol allow to filter Pull Requests by \
 number, e.g. #NUMBER or ORG/REPO#NUMBER for the ORG/REPO submodule. If \
@@ -2284,7 +2303,9 @@ ALL sets user:#all as the default include filter. Default: ORG.""")
             "label": ("%s Pull Request(s) labelled as", lambda x: x),
             "pr": ("%s Pull Request(s)", lambda x: x),
             "user": ("%s Pull Request(s) opened by", self.get_user_desc),
-            "stage": ("%s Pull Request(s) staged as", lambda x: x)}
+            "stage": ("%s Pull Request(s) staged as", lambda x: x),
+            "milestone": ("%s Pull Request(s) with milestone", lambda x: x),
+        }
 
         for ftype in sorted(list(ftype_desc.keys()), reverse=True):
             for key in sorted(list(self.filters[ftype].keys()), reverse=True):
@@ -2351,7 +2372,7 @@ ALL sets user:#all as the default include filter. Default: ORG.""")
     def _parse_key_value(self, ftype, key_value):
         """Parse a key/value pattern of type key/value"""
         keyvalue_pattern = r'(?P<key>([\w-]+)(/[\w-]+)?)' + \
-            r':(?P<value>#?([/\w-]+))'
+            r':(?P<value>#?([/\w.-]+))'
         pattern = re.compile(keyvalue_pattern + '$')
         m = pattern.match(key_value)
         if not m:
