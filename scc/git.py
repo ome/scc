@@ -4129,7 +4129,6 @@ class BumpVersionConda(GitRepoCommand):
             raise Stop(1, "URL %s not valid" % dev_url)
 
         latest_tag = self.parse_tag(output)
-        previous_tag = ""
         if self.KEY_VERSION in jinja2.keys():
             previous_tag = jinja2[self.KEY_VERSION]
         else:
