@@ -21,6 +21,9 @@
 
 
 from __future__ import print_function
+
+import json
+
 from past.builtins import cmp
 from builtins import zip
 from builtins import input
@@ -3380,6 +3383,7 @@ class MilestoneCommand(GitRepoCommand):
         subparsers = self.parser.add_subparsers(title="actions")
         list_parser = subparsers.add_parser('list', help='List milestones')
         list_parser.set_defaults(func=self.list)
+        list_parser.add_argument('-j', '--json', action='store_true')
 
         create_parser = subparsers.add_parser(
             'create', help='Create a new milestone')
@@ -3440,11 +3444,22 @@ class MilestoneCommand(GitRepoCommand):
             milestones = repo.origin.get_milestones()
             parsed = [(m.due_on, m) for m in milestones]
             parsed.sort(key=functools.cmp_to_key(self.cmp_date))
-            print(header)
-            for due_on, m in parsed:
-                due = due_on is not None and due_on or ""
-                print(fmt % (m.title, m.created_at, due,
-                             "%-3s (%s)" % (m.open_issues, m.closed_issues)))
+            if not args.json:
+                print(header)
+                for due_on, m in parsed:
+                    due = due_on is not None and due_on or ""
+                    issues = "%-3s (%s)" % (m.open_issues, m.closed_issues)
+                    print(fmt % (m.title, m.created_at, due, issues))
+            else:
+                print(json.dumps([
+                    dict(
+                        title=m.title,
+                        created_at=m.created_at.isoformat(),
+                        due=due_on.isoformat() if due_on else None,
+                        open_issues=m.open_issues,
+                        closed_issues=m.closed_issues,
+                    ) for due_on, m in parsed
+                ]))
 
     def check_write_permissions(self, repos):
         for repo in repos:
