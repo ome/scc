@@ -4199,7 +4199,7 @@ class BumpVersionConda(GitRepoCommand):
         """
         Return the latest tag for the given repository.
         """
-        command = "git ls-remote --refs --tags --sort=\"version:refname\" %s | grep -v 'v*.rc[0-9]\+$' | grep -v 'v*.dev[0-9]\+$' | grep 'v*\.' |grep -v 'v*.-m[0-9]\+$' | tail -n1" % repo_url  # noqa
+        command = "git ls-remote --refs --tags --sort=\"version:refname\" %s | grep -v 'v*.rc[0-9]\\+$' | grep -v 'v*.dev[0-9]\\+$' | grep 'v*\\.' |grep -v 'v*.-m[0-9]\\+$' | tail -n1" % repo_url  # noqa
         process = subprocess.run(command, shell=True, check=True,
                                  stdout=subprocess.PIPE,
                                  universal_newlines=True)
