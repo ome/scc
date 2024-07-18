@@ -1913,7 +1913,7 @@ class GitRepository(object):
             finally:
                 self.cd(self.path)
 
-        if not info and False:
+        if not info:
             summary_update = self.summary_commit(
                 merge_msg, commit_id=commit_id, top_message=top_message,
                 update_gitmodules=update_gitmodules, allow_empty=allow_empty)
