@@ -21,6 +21,9 @@
 
 
 from __future__ import print_function
+
+import json
+
 from past.builtins import cmp
 from builtins import zip
 from builtins import input
@@ -546,6 +549,13 @@ class PullRequest(object):
         return u"  - PR %s %s '%s'" % (self.get_number(), self.get_login(),
                                        self.get_title())
 
+    def as_json(self):
+        return {
+            'id': self.get_number(),
+            'user': self.get_login(),
+            'title': self.get_title(),
+        }
+
     @retry_on_error(retries=SCC_RETRIES)
     def __getattr__(self, key):
         return getattr(self.pull, key)
@@ -868,19 +878,29 @@ class GitHubRepository(object):
     def open_pr(self, title, description, base, head):
         return self.repo.create_pull(title, description, base, head)
 
-    def merge_info(self):
+    def merge_info(self, json_output=None):
         """List the candidate Pull Request to be merged"""
 
         msg = ""
+        json_output = json_output if json_output is not None else {}
+        json_output['candidates'] = {}
         if self.candidate_pulls:
             msg += "Candidate PRs:\n"
             for pullrequest in self.candidate_pulls:
                 msg += str(pullrequest) + "\n"
+            json_output['candidates']['pulls'] = [
+                pullrequest.as_json()
+                for pullrequest in self.candidate_pulls
+            ]
         if self.candidate_branches:
             msg += "Candidate Branches:\n"
             for remote, repo_branches in self.candidate_branches.items():
                 for branch in repo_branches[1]:
                     msg += "  # %s:%s\n" % (remote, branch)
+            json_output['candidates']['branches'] = dict(
+                (remote, [branch for branch in repo_branches[1]])
+                for remote, repo_branches in self.candidate_branches.items()
+            )
 
         return msg
 
@@ -905,10 +925,11 @@ class GitHubRepository(object):
 
         return False, None
 
-    def find_candidate_pulls(self, filters):
+    def find_candidate_pulls(self, filters, json_output=None):
         """Find candidate Pull Requests for merging."""
         self.dbg("## PRs found:")
         msg = ""
+        json_output = json_output if json_output is not None else {}
 
         # Fail fast if default is none and no include filter is specified
         if not filters["include"]:
@@ -940,6 +961,13 @@ class GitHubRepository(object):
             msg += "\n".join(["%s (%s)" % (str(key), str(value))
                               for key, value in excluded_pulls.items()])
             msg += "\n"
+            json_output['excluded'] = [
+                {
+                    **pull.as_json(),
+                    'reason': reason,
+                }
+                for pull, reason in excluded_pulls.items()
+            ]
 
         self.candidate_pulls.sort(key=lambda a: a.get_number())
 
@@ -1553,7 +1581,7 @@ class GitRepository(object):
                 self.call("git", "reset", "--hard", "%s" % premerge_sha)
 
     def merge(self, comment=False, commit_id="merge",
-              set_commit_status=False):
+              set_commit_status=False, json_output=None):
         """Merge candidate pull requests and pull requests."""
         for pull in self.origin.candidate_pulls:
             self.call("git", "fetch", "origin", "pull/%s/head" % pull.number)
@@ -1561,6 +1589,8 @@ class GitRepository(object):
         for key, url in list(self.get_merge_remotes().items()):
             self.call("git", "remote", "add", key, url)
             self.fetch(key)
+
+        json_output = json_output if json_output is not None else {}
 
         upstream_sha = self.get_current_sha1()
         changed_files = {}
@@ -1598,7 +1628,8 @@ class GitRepository(object):
                         '%s:%s' % (remote, branch_name))
 
         merge_msg = self.log_merge(merged_pulls, merged_branches,
-                                   conflicting_pulls, conflicting_branches)
+                                   conflicting_pulls, conflicting_branches,
+                                   json_output=json_output)
 
         if set_commit_status and get_token():
             conflict = len(conflicting_branches) or len(conflicting_pulls)
@@ -1613,27 +1644,39 @@ class GitRepository(object):
         return merge_msg
 
     def log_merge(self, merged_pulls, merged_branches, conflicting_pulls,
-                  conflicting_branches):
+                  conflicting_branches, json_output=None):
 
         merge_msgs = []
+        json_output = json_output if json_output is not None else {}
+        json_output['merged'] = {}
+        json_output['conflicting'] = {}
 
         if merged_pulls:
             merge_msg = "Merged PRs:\n"
             merge_msg += "\n".join([str(x) for x in merged_pulls])
             merge_msg += "\n"
             merge_msgs.append(merge_msg)
+            json_output['merged']['pulls'] = [
+                pr.as_json() for pr in merged_pulls
+            ]
 
         if merged_branches:
             merge_msg = "Merged branches:\n"
             merge_msg += "\n".join(["  # %s\n" % x for x in merged_branches])
             merge_msg += "\n"
             merge_msgs.append(merge_msg)
+            json_output['merged']['branches'] = [
+                branch for branch in merged_branches
+            ]
 
         if conflicting_pulls:
             merge_msg = "Conflicting PRs (not included):\n"
             merge_msg += "\n".join([str(x) for x in conflicting_pulls])
             merge_msg += "\n"
             merge_msgs.append(merge_msg)
+            json_output['conflicting']['pulls'] = [
+                pr.as_json() for pr in conflicting_pulls
+            ]
 
         if conflicting_branches:
             merge_msg = "Conflicting branches (not included):\n"
@@ -1641,6 +1684,9 @@ class GitRepository(object):
                                     conflicting_branches])
             merge_msg += "\n"
             merge_msgs.append(merge_msg)
+            json_output['conflicting']['branches'] = [
+                branch for branch in conflicting_branches
+            ]
 
         return "\n".join(merge_msgs)
 
@@ -1805,7 +1851,8 @@ class GitRepository(object):
 
     def rmerge(self, filters, info=False, comment=False, commit_id="merge",
                top_message=None, update_gitmodules=False,
-               set_commit_status=False, allow_empty=True, is_submodule=False):
+               set_commit_status=False, allow_empty=True, is_submodule=False,
+               json_output=None):
         """Recursively merge PRs for each submodule."""
 
         if self.repository_config is not None and \
@@ -1819,11 +1866,15 @@ class GitRepository(object):
         updated = False
         merge_msg = ""
         merge_msg += str(self.origin) + "\n"
-        merge_msg += self.origin.find_candidate_pulls(filters)
+        json_output = json_output if json_output is not None else {}
+        json_output['repo'] = self.origin.repo_name
+        json_output['submodules'] = {}
+        merge_msg += self.origin.find_candidate_pulls(filters,
+                                                      json_output=json_output)
         self.origin.find_candidate_branches(
             filters, fork_filter=self.get_fork_filter(is_submodule))
         if info:
-            merge_msg += self.origin.merge_info()
+            merge_msg += self.origin.merge_info(json_output=json_output)
         else:
             self.cd(self.path)
             self.write_directories()
@@ -1833,11 +1884,12 @@ class GitRepository(object):
                                                    remote=self.remote)
                 merge_msg += ff_msg
                 if ff_log:
-                    merge_msg += self.scan_log(ff_log)
+                    merge_msg += self.scan_log(ff_log, json_output=json_output)
                 merge_msg += '\n'
 
             merge_msg += self.merge(comment, commit_id=commit_id,
-                                    set_commit_status=set_commit_status)
+                                    set_commit_status=set_commit_status,
+                                    json_output=json_output)
             postsha1 = self.get_current_sha1()
             updated = (presha1 != postsha1)
 
@@ -1847,12 +1899,16 @@ class GitRepository(object):
             # Do not copy top-level PRs
             for ftype in ["include", "exclude"]:
                 sub_filters[ftype].pop("pr", None)
+            sub_json_output = {}
+            json_output['submodules'][submodule_repo.repo_name] = \
+                sub_json_output
             try:
                 submodule_updated, submodule_msg = submodule_repo.rmerge(
                     sub_filters, info, comment, commit_id=commit_id,
                     update_gitmodules=update_gitmodules,
                     set_commit_status=set_commit_status,
-                    allow_empty=allow_empty, is_submodule=True)
+                    allow_empty=allow_empty, is_submodule=True,
+                    json_output=sub_json_output)
                 merge_msg += "\n" + submodule_msg
             finally:
                 self.cd(self.path)
@@ -1866,17 +1922,20 @@ class GitRepository(object):
 
         return updated, merge_msg
 
-    def scan_log(self, log):
+    def scan_log(self, log, json_output=None):
         """Scan a log to produce a digest of the merged PRs"""
         merge_msg = "Previously merged:\n"
+        json_output = json_output if json_output is not None else {}
+        json_output['mergedPreviously'] = []
         pattern = r'Merge pull request #(\d+)'
         for line in log.split('\n'):
             s = re.search(pattern, line)
             if s is None:
                 continue
             try:
-                pr = self.origin.get_pull(int(s.group(1)))
-                merge_msg += str(PullRequest(pr)) + '\n'
+                pr = PullRequest(self.origin.get_pull(int(s.group(1))))
+                merge_msg += str(pr) + '\n'
+                json_output['mergedPreviously'].push(pr.as_json())
             except github.UnknownObjectException:
                 self.log.warn("Failed to retrieve %s" % int(s.group(1)),
                               exc_info=1)
@@ -3318,6 +3377,8 @@ class Merge(FilteredPullRequestsCommand):
             help='Set success/failure status on latest commits in all PRs '
             'in the merge.')
         self.add_new_commit_args()
+        self.parser.add_argument('-j', '--json', action='store_true',
+                                 help='output in JSON format')
 
     def get_action(self):
         return "Merging"
@@ -3354,15 +3415,22 @@ class Merge(FilteredPullRequestsCommand):
         if args.check_commit_status:
             commit_args.append("-S%s" % args.check_commit_status)
 
+        json_output = {}
+
         updated, merge_msg = main_repo.rmerge(
             self.filters, args.info,
             args.comment, commit_id=" ".join(commit_args),
             top_message=args.message,
             update_gitmodules=args.update_gitmodules,
-            set_commit_status=args.set_commit_status)
+            set_commit_status=args.set_commit_status,
+            json_output=json_output)
 
         for line in merge_msg.split("\n"):
             self.log.info(line)
+
+        if args.json:
+            print(json.dumps(json_output, indent=2))
+
         return updated
 
 
@@ -3380,6 +3448,8 @@ class MilestoneCommand(GitRepoCommand):
         subparsers = self.parser.add_subparsers(title="actions")
         list_parser = subparsers.add_parser('list', help='List milestones')
         list_parser.set_defaults(func=self.list)
+        list_parser.add_argument('-j', '--json', action='store_true',
+                                 help='output in JSON format')
 
         create_parser = subparsers.add_parser(
             'create', help='Create a new milestone')
@@ -3440,11 +3510,22 @@ class MilestoneCommand(GitRepoCommand):
             milestones = repo.origin.get_milestones()
             parsed = [(m.due_on, m) for m in milestones]
             parsed.sort(key=functools.cmp_to_key(self.cmp_date))
-            print(header)
-            for due_on, m in parsed:
-                due = due_on is not None and due_on or ""
-                print(fmt % (m.title, m.created_at, due,
-                             "%-3s (%s)" % (m.open_issues, m.closed_issues)))
+            if not args.json:
+                print(header)
+                for due_on, m in parsed:
+                    due = due_on is not None and due_on or ""
+                    issues = "%-3s (%s)" % (m.open_issues, m.closed_issues)
+                    print(fmt % (m.title, m.created_at, due, issues))
+            else:
+                print(json.dumps([
+                    dict(
+                        title=m.title,
+                        created_at=m.created_at.isoformat(),
+                        due=due_on.isoformat() if due_on else None,
+                        open_issues=m.open_issues,
+                        closed_issues=m.closed_issues,
+                    ) for due_on, m in parsed
+                ], indent=2))
 
     def check_write_permissions(self, repos):
         for repo in repos:
@@ -4129,7 +4210,6 @@ class BumpVersionConda(GitRepoCommand):
             raise Stop(1, "URL %s not valid" % dev_url)
 
         latest_tag = self.parse_tag(output)
-        previous_tag = ""
         if self.KEY_VERSION in jinja2.keys():
             previous_tag = jinja2[self.KEY_VERSION]
         else:
@@ -4200,7 +4280,7 @@ class BumpVersionConda(GitRepoCommand):
         """
         Return the latest tag for the given repository.
         """
-        command = "git ls-remote --refs --tags --sort=\"version:refname\" %s | grep -v 'v*.rc[0-9]\+$' | grep -v 'v*.dev[0-9]\+$' | grep 'v*\.' |grep -v 'v*.-m[0-9]\+$' | tail -n1" % repo_url  # noqa
+        command = "git ls-remote --refs --tags --sort=\"version:refname\" %s | grep -v 'v*.rc[0-9]\\+$' | grep -v 'v*.dev[0-9]\\+$' | grep 'v*\\.' |grep -v 'v*.-m[0-9]\\+$' | tail -n1" % repo_url  # noqa
         process = subprocess.run(command, shell=True, check=True,
                                  stdout=subprocess.PIPE,
                                  universal_newlines=True)
